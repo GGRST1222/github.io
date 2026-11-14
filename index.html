@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ggrst.io</title>
+<meta name="description" content="ggrst.io — 遊戲、程式、知識的部落格與遊戲進度紀錄">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+TC:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#141414;--y:#FFD60A;--g:#D9D9D9;--bg:#F2F2F2;--mid:#555555;--sh:#6B6B6B}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Space Grotesk','Noto Sans TC',sans-serif}
+a{color:var(--ink)}a:hover{color:var(--mid)}
+button{cursor:pointer;font:inherit;color:inherit}
+.wrap{max-width:1200px;margin:0 auto;padding:96px 24px;display:flex;flex-direction:column;gap:40px}
+.mono{font-family:'JetBrains Mono',monospace}
+.b3{border:3px solid var(--ink)}
+.pill{border:2px solid var(--ink);border-radius:999px;padding:4px 12px;font-weight:700;font-size:14px;display:inline-block}
+.kick{align-self:flex-start;border:3px solid var(--ink);border-radius:999px;padding:6px 14px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;background:#fff}
+h2{margin:0;font-weight:900;font-size:clamp(36px,4.5vw,56px);letter-spacing:-1px}
+.btn{text-decoration:none;min-height:56px;padding:0 28px;display:inline-flex;align-items:center;border:3px solid var(--ink);border-radius:14px;font-weight:700;font-size:18px;color:var(--ink)}
+.pop{transition:transform .15s ease,box-shadow .15s ease}
+.pop:hover{transform:translate(-3px,-3px)}
+.card{background:#fff;border:3px solid var(--ink);border-radius:24px;box-shadow:6px 6px 0 var(--ink)}
+section{border-bottom:3px solid var(--ink)}
+/* nav */
+header{border-bottom:3px solid var(--ink);background:var(--bg);position:sticky;top:0;z-index:10}
+header .in{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.logo{text-decoration:none;display:flex;align-items:center;gap:10px}
+.logo i{width:44px;height:44px;background:var(--g);border:3px solid var(--ink);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-style:normal;font-size:20px}
+.logo b{font-size:22px;letter-spacing:-.5px}.logo b span{color:#6B6B6B}
+nav{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+nav a{text-decoration:none;font-weight:700;padding:12px}
+#langBtn{min-height:44px;padding:0 18px;background:var(--y);border:3px solid var(--ink);border-radius:999px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;box-shadow:3px 3px 0 var(--ink)}
+/* hero */
+#top{background:var(--ink);overflow:hidden}
+#top .wrap{flex-direction:row;flex-wrap:wrap;align-items:center;gap:48px;padding-bottom:104px}
+.hero-l{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:28px}
+.hero-l h1{margin:0;font-weight:900;font-size:clamp(48px,7vw,104px);line-height:1.02;letter-spacing:-2px;color:#fff;white-space:pre-line}
+.hero-l p{margin:0;max-width:560px;font-size:20px;line-height:1.6;color:#fff;font-weight:500}
+.hero-r{flex:1 1 320px;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.tile{aspect-ratio:1;border:3px solid var(--ink);box-shadow:8px 8px 0 var(--sh);display:flex;align-items:center;justify-content:center}
+/* topics */
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:28px}
+.topic{text-decoration:none;color:var(--ink);border:3px solid var(--ink);border-radius:24px;padding:32px;box-shadow:6px 6px 0 var(--ink);display:flex;flex-direction:column;gap:16px;min-height:240px}
+.topic .n{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px}
+.topic .t{font-weight:900;font-size:40px}
+.topic .d{font-size:18px;line-height:1.6;font-weight:500}
+.topic .m{margin-top:auto;font-weight:700}
+/* games */
+#games{background:var(--g)}
+.games{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:28px;align-items:start}
+.game{padding:28px;display:flex;flex-direction:column;gap:20px}
+.game h3{margin:0;font-weight:900;font-size:26px;line-height:1.25}
+.lab{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:var(--mid)}
+.bar{height:22px;background:var(--bg);border:3px solid var(--ink);border-radius:999px;overflow:hidden}
+.bar i{display:block;height:100%;border-right:3px solid var(--ink);transition:width .25s ease}
+.ms{min-height:44px;padding:6px 0;background:none;border:none;display:flex;align-items:center;gap:12px;text-align:left;font-size:16px;font-weight:500;width:100%}
+.box{flex-shrink:0;width:26px;height:26px;border:3px solid var(--ink);border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center}
+.ms[aria-pressed="true"] .box{background:var(--ink)}
+.ms[aria-pressed="true"] .box svg{display:block}.box svg{display:none}
+.row{display:flex;justify-content:space-between;gap:12px;font-size:16px}
+.count{width:64px;text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;border:2px solid var(--ink);border-radius:8px;padding:4px 6px;background:#fff;min-height:36px}
+.note{background:var(--bg);border:2px solid var(--ink);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.note textarea{font:inherit;font-size:15px;line-height:1.6;border:none;background:transparent;resize:vertical;min-height:52px;outline:none;color:var(--ink)}
+/* map */
+.map-wrap{overflow-x:auto;padding:4px 8px 12px 4px}
+.map{min-width:720px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(5,112px);grid-template-areas:'hebra hebra woodland woodland eldin akkala' 'tabantha tabantha ridgeland central eldin akkala' 'gerudo gerudo plateau central lanayru lanayru' 'gerudo gerudo plateau dueling hateno hateno' 'wasteland wasteland lake lake faron faron';gap:10px;background:var(--bg);border:3px solid var(--ink);border-radius:20px;padding:12px}
+.reg{border:3px solid var(--ink);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:4px;text-align:left;background:#fff}
+.reg[data-s="1"]{background:var(--y)}
+.reg[data-s="2"]{background:var(--ink);color:#fff}
+.reg .nm{font-weight:900;font-size:17px;line-height:1.2}
+.reg .sb{font-size:12px;opacity:.8}
+.reg .st{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px}
+.mark{background:var(--y);color:var(--ink);border:2px solid var(--ink);border-radius:999px;padding:1px 8px;font-weight:700;font-size:12px}
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:16px;font-size:14px;font-weight:500}
+.legend span{display:flex;align-items:center;gap:8px}
+.sw{width:18px;height:18px;border:2px solid var(--ink);border-radius:5px}
+/* posts */
+#posts{background:var(--y)}
+.filters{display:flex;flex-wrap:wrap;gap:10px}
+.filters button{min-height:44px;padding:0 18px;background:#fff;border:3px solid var(--ink);border-radius:999px;font-weight:700;font-size:16px}
+.filters button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:28px}
+.post{background:#fff;border:3px solid var(--ink);border-radius:20px;box-shadow:6px 6px 0 var(--ink);overflow:hidden;display:flex;flex-direction:column}
+.post .cv{height:140px;border-bottom:3px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px}
+.post .bd{padding:24px;display:flex;flex-direction:column;gap:12px;flex-grow:1}
+.post h3{margin:0;font-weight:900;font-size:24px;line-height:1.3}
+.post p{margin:0;font-size:16px;line-height:1.6;color:var(--mid)}
+/* about */
+#about .wrap{flex-direction:row;flex-wrap:wrap;align-items:center;gap:56px}
+.avatar{flex:1 1 280px;min-width:0;max-width:360px;aspect-ratio:1;background:var(--g);border:3px solid var(--ink);border-radius:999px;box-shadow:10px 10px 0 var(--y);display:flex;align-items:center;justify-content:center;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;padding:24px}
+/* contact */
+#contact{background:var(--ink);color:#fff;border-bottom:none}
+#contact h2{font-size:clamp(40px,6vw,80px);color:#fff}
+.cbtn{text-decoration:none;min-height:56px;padding:0 24px;display:inline-flex;align-items:center;background:#fff;color:var(--ink);border:3px solid #fff;border-radius:14px;font-weight:700;font-size:17px;box-shadow:6px 6px 0 var(--sh)}
+footer{margin-top:48px;padding-top:24px;border-top:2px solid var(--mid);display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#BDBDBD}
+</style>
+</head>
+<body>
+
+<header>
+<div class="in">
+<a href="#top" class="logo"><i>g</i><b>ggrst<span>.io</span></b></a>
+<nav>
+<a href="#games" data-i="navGames"></a>
+<a href="#posts" data-i="navPosts"></a>
+<a href="#topics" data-i="navTopics"></a>
+<a href="#about" data-i="navAbout"></a>
+<a href="#contact" data-i="navContact"></a>
+<button id="langBtn"></button>
+</nav>
+</div>
+</header>
+
+<section id="top">
+<div class="wrap">
+<div class="hero-l">
+<span class="kick" style="background:var(--y)">BLOG · ggrst.io</span>
+<h1 data-i="heroTitle"></h1>
+<p data-i="heroSub"></p>
+<div style="display:flex;flex-wrap:wrap;gap:16px">
+<a href="#games" class="btn pop" style="background:var(--y);box-shadow:6px 6px 0 var(--sh)" data-i="cta1"></a>
+<a href="#about" class="btn pop" style="background:#fff;box-shadow:6px 6px 0 var(--sh)" data-i="cta2"></a>
+</div>
+</div>
+<div class="hero-r" aria-hidden="true">
+<div class="tile" style="background:var(--g);border-radius:28px"><svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16" cy="11.5" r=".8"/><circle cx="17.5" cy="13.5" r=".8"/></svg></div>
+<div class="tile" style="background:#fff;border-radius:999px"><svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg></div>
+<div class="tile" style="background:var(--y);border-radius:999px 999px 28px 28px"><svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg></div>
+<div class="tile mono" style="background:#fff;border-radius:28px;font-weight:700;font-size:44px">&gt;_</div>
+</div>
+</div>
+</section>
+
+<section id="topics">
+<div class="wrap">
+<h2 data-i="topicsTitle"></h2>
+<div class="grid3">
+<a href="#games" class="topic pop" style="background:var(--g)"><span class="n">01</span><span class="t" data-i="game"></span><span class="d" data-i="gameDesc"></span><span class="m" data-i="seeGames"></span></a>
+<a href="#posts" class="topic pop" data-filter="code" style="background:var(--y)"><span class="n">02</span><span class="t" data-i="code"></span><span class="d" data-i="codeDesc"></span><span class="m" data-i="seePosts"></span></a>
+<a href="#posts" class="topic pop" data-filter="know" style="background:#fff"><span class="n">03</span><span class="t" data-i="know"></span><span class="d" data-i="knowDesc"></span><span class="m" data-i="seePosts"></span></a>
+</div>
+</div>
+</section>
+
+<section id="games">
+<div class="wrap">
+<div style="display:flex;flex-direction:column;gap:12px">
+<span class="kick">GAME LOG</span>
+<h2 data-i="gamesTitle"></h2>
+<p style="margin:0;font-size:18px;line-height:1.6;font-weight:500;max-width:640px" data-i="gamesSub"></p>
+</div>
+<div class="games" id="gameList"></div>
+
+<article class="card" style="padding:28px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<span class="lab">BREATH OF THE WILD · MAP</span>
+<h3 style="margin:0;font-weight:900;font-size:30px" data-i="mapTitle"></h3>
+<span style="font-size:15px;color:var(--mid)" data-i="mapHint"></span>
+</div>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+<span class="mono b3" style="background:var(--y);border-radius:14px;padding:10px 16px;font-weight:700;font-size:18px"><span data-i="towersLabel"></span> <span id="towerCount">0</span> / 15</span>
+<a href="https://game8.co/games/LoZ-BotW/archives/292501" target="_blank" rel="noopener" class="pop b3" style="text-decoration:none;min-height:48px;padding:0 18px;display:inline-flex;align-items:center;background:var(--ink);color:#fff;border-radius:14px;font-weight:700;box-shadow:4px 4px 0 #8C8C8C" data-i="fullMap"></a>
+</div>
+</div>
+<div class="map-wrap"><div class="map" id="map" role="group"></div></div>
+<div class="legend">
+<span><i class="sw" style="background:#fff"></i><b data-i="st0"></b></span>
+<span><i class="sw" style="background:var(--y)"></i><b data-i="st1"></b></span>
+<span><i class="sw" style="background:var(--ink)"></i><b data-i="st2"></b></span>
+<span style="color:var(--mid)" data-i="mapNote"></span>
+</div>
+</article>
+</div>
+</section>
+
+<section id="posts">
+<div class="wrap" style="gap:32px">
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:20px">
+<h2 data-i="postsTitle"></h2>
+<div class="filters" id="filters" role="group"></div>
+</div>
+<div class="posts" id="postList"></div>
+</div>
+</section>
+
+<section id="about">
+<div class="wrap">
+<div class="avatar" data-i="avatarPh"></div>
+<div style="flex:999 1 480px;min-width:0;display:flex;flex-direction:column;gap:20px">
+<h2 data-i="aboutTitle"></h2>
+<p style="margin:0;font-size:20px;line-height:1.7;font-weight:500" data-i="aboutBody"></p>
+<div style="display:flex;flex-wrap:wrap;gap:10px">
+<span class="pill" style="background:var(--y);padding:8px 16px" data-i="chip1"></span>
+<span class="pill" style="background:var(--g);padding:8px 16px" data-i="chip2"></span>
+<span class="pill" style="background:#fff;padding:8px 16px" data-i="chip3"></span>
+</div>
+</div>
+</div>
+</section>
+
+<section id="contact">
+<div class="wrap" style="gap:32px;padding-bottom:64px">
+<h2 data-i="contactTitle"></h2>
+<p style="margin:0;font-size:20px;line-height:1.6;color:#E6E6E6;max-width:620px" data-i="contactSub"></p>
+<div style="display:flex;flex-wrap:wrap;gap:16px">
+<a href="mailto:hello@ggrst.io" class="cbtn pop mono" style="background:var(--y)">[YOUR EMAIL]</a>
+<a href="https://github.com/" class="cbtn pop">GitHub</a>
+<a href="https://x.com/" class="cbtn pop" style="box-shadow:6px 6px 0 var(--y)">X</a>
+<a href="https://discord.com/" class="cbtn pop">Discord</a>
+</div>
+<footer><span>© 2026 ggrst.io</span><span data-i="footer"></span></footer>
+</div>
+</section>
+
+<script>
+(function () {
+  var T = {
+    zh: {
+      navGames: '遊戲進度', navPosts: '文章', navTopics: '主題', navAbout: '關於', navContact: '聯絡',
+      langBtn: 'EN', langAria: 'Switch to English',
+      heroTitle: '玩遊戲、\n寫程式、\n收集知識。',
+      heroSub: '記錄我在遊戲、程式和各種知識裡的探索與筆記。',
+      cta1: '看遊戲進度 →', cta2: '關於我',
+      topicsTitle: '三個主題', seePosts: '看文章 →', seeGames: '看進度 →',
+      game: '遊戲', code: '程式', know: '知識', all: '全部',
+      gameDesc: '遊戲進度紀錄、心得和攻略筆記。',
+      codeDesc: '開發筆記、好用工具，還有踩過的坑。',
+      knowDesc: '讀書筆記、冷知識和值得記下來的東西。',
+      gamesTitle: '遊戲進度', gamesSub: '正在玩的遊戲和目前的進度。點里程碑打勾、填收集數量，進度會存在這台裝置的瀏覽器裡。',
+      progress: '主線進度', milestones: '里程碑', collect: '收集', lastNote: '最近進度', notePh: '寫下最近玩到哪裡、卡在哪裡…',
+      playing: '進行中', cleared: '已破關', platformPh: '[平台]',
+      mapTitle: '海拉魯地圖 · 塔區進度', mapHint: '點區域切換：未開塔 → 已開塔 → 已探索',
+      towersLabel: '已開塔', fullMap: '完整互動地圖 ↗', st0: '未開塔', st1: '已開塔', st2: '已探索', mapNote: '示意圖，位置與比例為概略',
+      beast: '神獸', castle: '海拉魯城', start: '起點',
+      postsTitle: '最新文章', filterAria: '依主題篩選',
+      coverPh: '[封面圖]', datePh: '[日期]', titlePh: '[文章標題]', excerptPh: '[一句話摘要]', readMore: '閱讀全文 →',
+      avatarPh: '[你的大頭照]', aboutTitle: '關於我',
+      aboutBody: '[一段自我介紹：你是誰、平常在做什麼、為什麼開始寫這個部落格。]',
+      chip1: '[常玩的遊戲]', chip2: '[常用的語言／框架]', chip3: '[最近在學的東西]',
+      contactTitle: '一起聊聊？', contactSub: '想討論遊戲、程式，或只是打個招呼，都歡迎來找我。',
+      footer: '用鍵盤和手把打造'
+    },
+    en: {
+      navGames: 'Game log', navPosts: 'Posts', navTopics: 'Topics', navAbout: 'About', navContact: 'Contact',
+      langBtn: '中文', langAria: '切換成中文',
+      heroTitle: 'Play games.\nWrite code.\nCollect knowledge.',
+      heroSub: 'Notes and explorations from games, code and everything worth knowing.',
+      cta1: 'Game progress →', cta2: 'About me',
+      topicsTitle: 'Three topics', seePosts: 'See posts →', seeGames: 'See progress →',
+      game: 'Games', code: 'Code', know: 'Knowledge', all: 'All',
+      gameDesc: 'Progress logs, impressions and guide notes.',
+      codeDesc: 'Dev notes, handy tools and the bugs I stepped on.',
+      knowDesc: 'Reading notes, fun facts and things worth writing down.',
+      gamesTitle: 'Game progress', gamesSub: 'What I am playing and how far I have got. Checkmarks, counts and notes are saved in this browser.',
+      progress: 'Main progress', milestones: 'Milestones', collect: 'Collection', lastNote: 'Latest', notePh: 'Where you are now, and where you got stuck…',
+      playing: 'Playing', cleared: 'Cleared', platformPh: '[Platform]',
+      mapTitle: 'Hyrule map · Tower regions', mapHint: 'Tap a region: locked → tower active → explored',
+      towersLabel: 'Towers', fullMap: 'Full interactive map ↗', st0: 'Tower locked', st1: 'Tower active', st2: 'Explored', mapNote: 'Schematic, positions and scale are approximate',
+      beast: 'Divine Beast', castle: 'Hyrule Castle', start: 'Start',
+      postsTitle: 'Latest posts', filterAria: 'Filter by topic',
+      coverPh: '[Cover image]', datePh: '[Date]', titlePh: '[Post title]', excerptPh: '[One-line summary]', readMore: 'Read more →',
+      avatarPh: '[Your photo]', aboutTitle: 'About me',
+      aboutBody: '[A short intro: who you are, what you do, and why you started this blog.]',
+      chip1: '[Games you play]', chip2: '[Languages / frameworks]', chip3: '[Currently learning]',
+      contactTitle: "Let's talk?", contactSub: 'Games, code, or just saying hi. My inbox is open.',
+      footer: 'Built with a keyboard and a controller'
+    }
+  };
+
+  var GAMES = [
+    { id: 'botw', color: '#141414', platform: null,
+      zh: '薩爾達傳說 曠野之息', en: 'The Legend of Zelda: Breath of the Wild',
+      items: [['解放水之神獸（卓拉領地）', 'Free the water Divine Beast (Zora’s Domain)'], ['解放風之神獸（利特村）', 'Free the wind Divine Beast (Rito Village)'], ['解放火之神獸（死亡之山）', 'Free the fire Divine Beast (Death Mountain)'], ['解放雷之神獸（格魯德沙漠）', 'Free the lightning Divine Beast (Gerudo Desert)'], ['擊敗災厄加儂', 'Defeat Calamity Ganon']],
+      counts: [['神廟', 'Shrines', 120], ['克洛格種子', 'Korok seeds', 900]] },
+    { id: 'acnh', color: '#FFD60A', platform: 'Switch',
+      zh: '集合啦！動物森友會', en: 'Animal Crossing: New Horizons',
+      items: [['博物館開館', 'Open the museum'], ['蓋好商店', 'Build the shop'], ['蓋好裁縫店', 'Build the tailor shop'], ['舉辦 K.K. 演唱會', 'Host the K.K. concert'], ['島嶼評價五星', 'Reach a 5-star island rating']],
+      counts: [['魚類', 'Fish', 80], ['昆蟲', 'Bugs', 80], ['海洋生物', 'Sea creatures', 40], ['化石', 'Fossils', 73], ['藝術品', 'Art', 43]] },
+    { id: 'oot', color: '#8C8C8C', platform: null,
+      zh: '薩爾達傳說 時之笛', en: 'The Legend of Zelda: Ocarina of Time',
+      items: [['取得三顆精靈石', 'Collect the three Spiritual Stones'], ['通關 森林神殿', 'Clear the Forest Temple'], ['通關 火之神殿', 'Clear the Fire Temple'], ['通關 水之神殿', 'Clear the Water Temple'], ['通關 暗影神殿', 'Clear the Shadow Temple'], ['通關 魂之神殿', 'Clear the Spirit Temple'], ['擊敗加儂', 'Defeat Ganon']],
+      counts: [['黃金蜘蛛', 'Gold Skulltulas', 100], ['心之碎片', 'Pieces of Heart', 36]] }
+  ];
+
+  var REGIONS = [
+    ['hebra', '赫布拉', 'Hebra', ''], ['woodland', '森林', 'Woodland', ''], ['eldin', '艾爾汀', 'Eldin', 'beast'],
+    ['akkala', '阿卡萊', 'Akkala', ''], ['tabantha', '塔邦塔', 'Tabantha', 'beast'], ['ridgeland', '山丘', 'Ridgeland', ''],
+    ['central', '中央', 'Central', 'castle'], ['gerudo', '格魯德高地', 'Gerudo', ''], ['plateau', '初始台地', 'Great Plateau', 'start'],
+    ['lanayru', '拉聶爾', 'Lanayru', 'beast'], ['dueling', '雙子山', 'Dueling Peaks', ''], ['hateno', '哈特諾', 'Hateno', ''],
+    ['wasteland', '格魯德沙漠', 'Wasteland', 'beast'], ['lake', '海利亞湖', 'Lake', ''], ['faron', '費羅尼', 'Faron', '']
+  ];
+
+  var POSTS = ['game', 'code', 'know', 'code', 'game', 'know'];
+  var CAT_BG = { game: '#D9D9D9', code: '#FFD60A', know: '#FFFFFF' };
+
+  var KEY = 'ggrst-state-v1';
+  var S = { lang: 'zh', filter: 'all', done: {}, towers: {}, counts: {}, notes: {} };
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null'); if (saved) for (var k in saved) S[k] = saved[k]; } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    if (attrs) for (var a in attrs) {
+      if (a === 'text') n.textContent = attrs[a];
+      else if (a === 'style') n.style.cssText = attrs[a];
+      else if (a.slice(0, 2) === 'on') n.addEventListener(a.slice(2), attrs[a]);
+      else n.setAttribute(a, attrs[a]);
+    }
+    (kids || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+  var CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+  function renderGames(t, zh) {
+    var root = document.getElementById('gameList');
+    root.innerHTML = '';
+    GAMES.forEach(function (g) {
+      var n = 0;
+      g.items.forEach(function (_, i) { if (S.done[g.id + ':' + i]) n++; });
+      var pct = Math.round(n / g.items.length * 100);
+      var name = zh ? g.zh : g.en;
+
+      var ms = el('div', { style: 'display:flex;flex-direction:column;gap:4px' }, [el('span', { class: 'lab', text: t.milestones })]);
+      g.items.forEach(function (it, i) {
+        var key = g.id + ':' + i;
+        var b = el('button', { class: 'ms', 'aria-pressed': S.done[key] ? 'true' : 'false', onclick: function () { S.done[key] = !S.done[key]; save(); render(); } });
+        var box = el('span', { class: 'box', 'aria-hidden': 'true' }); box.innerHTML = CHECK;
+        b.appendChild(box); b.appendChild(el('span', { text: zh ? it[0] : it[1] }));
+        ms.appendChild(b);
+      });
+
+      var col = el('div', { style: 'display:flex;flex-direction:column;gap:8px;padding-top:16px;border-top:2px dashed #141414' }, [el('span', { class: 'lab', text: t.collect })]);
+      g.counts.forEach(function (c, i) {
+        var key = g.id + ':' + i;
+        var label = zh ? c[0] : c[1];
+        var inp = el('input', { class: 'count', type: 'number', min: '0', max: String(c[2]), inputmode: 'numeric', 'aria-label': label, placeholder: '0' });
+        if (S.counts[key] != null) inp.value = S.counts[key];
+        inp.addEventListener('change', function () { var v = Math.max(0, Math.min(c[2], parseInt(inp.value, 10) || 0)); inp.value = v; S.counts[key] = v; save(); });
+        col.appendChild(el('label', { class: 'row', style: 'align-items:center' }, [
+          el('span', { style: 'font-weight:500', text: label }),
+          el('span', { class: 'mono', style: 'display:flex;align-items:center;gap:8px;font-weight:700' }, [inp, el('span', { text: '/ ' + c[2] })])
+        ]));
+      });
+
+      var ta = el('textarea', { 'aria-label': t.lastNote, placeholder: t.notePh });
+      ta.value = S.notes[g.id] || '';
+      ta.addEventListener('input', function () { S.notes[g.id] = ta.value; save(); });
+
+      var bar = el('div', { class: 'bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct), 'aria-label': name }, [el('i', { style: 'width:' + pct + '%;background:' + g.color })]);
+
+      root.appendChild(el('article', { class: 'card game' }, [
+        el('div', { class: 'row', style: 'align-items:center' }, [
+          el('span', { class: 'pill', style: 'background:' + (pct === 100 ? '#FFD60A' : '#FFFFFF'), text: pct === 100 ? t.cleared : t.playing }),
+          el('span', { class: 'mono', style: 'font-size:14px;color:#555', text: g.platform || t.platformPh })
+        ]),
+        el('div', { style: 'display:flex;flex-direction:column;gap:6px' }, [el('h3', { text: name }), el('span', { style: 'font-size:14px;color:#555', text: zh ? g.en : g.zh })]),
+        el('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
+          el('div', { class: 'row', style: 'font-weight:700;font-size:15px' }, [el('span', { text: t.progress }), el('span', { class: 'mono', text: pct + '%' })]),
+          bar
+        ]),
+        ms, col,
+        el('label', { class: 'note' }, [el('span', { class: 'lab', text: t.lastNote }), ta])
+      ]));
+    });
+  }
+
+  function renderMap(t, zh) {
+    var root = document.getElementById('map');
+    root.setAttribute('aria-label', t.mapTitle);
+    root.innerHTML = '';
+    var labels = [t.st0, t.st1, t.st2], on = 0;
+    REGIONS.forEach(function (r) {
+      var s = S.towers[r[0]] || 0; if (s > 0) on++;
+      var name = zh ? r[1] : r[2];
+      var bottom = el('span', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:6px' }, [el('span', { class: 'st', text: labels[s] })]);
+      if (r[3]) bottom.appendChild(el('span', { class: 'mark', text: t[r[3]] }));
+      root.appendChild(el('button', { class: 'reg', 'data-s': String(s), style: 'grid-area:' + r[0], 'aria-label': name + ' · ' + labels[s],
+        onclick: function () { S.towers[r[0]] = ((S.towers[r[0]] || 0) + 1) % 3; save(); render(); } }, [
+        el('span', { style: 'display:flex;flex-direction:column;gap:2px' }, [el('span', { class: 'nm', text: name }), el('span', { class: 'sb', text: zh ? r[2] : r[1] })]),
+        bottom
+      ]));
+    });
+    document.getElementById('towerCount').textContent = on;
+  }
+
+  function renderPosts(t) {
+    var f = document.getElementById('filters');
+    f.setAttribute('aria-label', t.filterAria);
+    f.innerHTML = '';
+    ['all', 'game', 'code', 'know'].forEach(function (c) {
+      f.appendChild(el('button', { 'aria-pressed': S.filter === c ? 'true' : 'false', text: t[c], onclick: function () { S.filter = c; save(); render(); } }));
+    });
+    var list = document.getElementById('postList');
+    list.innerHTML = '';
+    POSTS.filter(function (c) { return S.filter === 'all' || S.filter === c; }).forEach(function (c) {
+      list.appendChild(el('article', { class: 'post pop' }, [
+        el('div', { class: 'cv', 'aria-hidden': 'true', style: 'background:' + CAT_BG[c], text: t.coverPh }),
+        el('div', { class: 'bd' }, [
+          el('div', { class: 'row', style: 'align-items:center' }, [el('span', { class: 'pill', style: 'background:' + CAT_BG[c], text: t[c] }), el('span', { class: 'mono', style: 'font-size:14px;color:#555', text: t.datePh })]),
+          el('h3', { text: t.titlePh }),
+          el('p', { text: t.excerptPh }),
+          el('a', { href: '#posts', style: 'margin-top:auto;font-weight:700;padding-top:8px', text: t.readMore })
+        ])
+      ]));
+    });
+  }
+
+  function render() {
+    var zh = S.lang === 'zh', t = T[S.lang];
+    document.documentElement.lang = zh ? 'zh-Hant' : 'en';
+    document.querySelectorAll('[data-i]').forEach(function (n) { n.textContent = t[n.getAttribute('data-i')]; });
+    var lb = document.getElementById('langBtn');
+    lb.textContent = t.langBtn; lb.setAttribute('aria-label', t.langAria);
+    renderGames(t, zh); renderMap(t, zh); renderPosts(t);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () { S.lang = S.lang === 'zh' ? 'en' : 'zh'; save(); render(); });
+  document.querySelectorAll('[data-filter]').forEach(function (a) {
+    a.addEventListener('click', function () { S.filter = a.getAttribute('data-filter'); save(); render(); });
+  });
+  render();
+})();
+</script>
+</body>
+</html>
