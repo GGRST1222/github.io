@@ -1,0 +1,414 @@
+/* ggrst.io admin: edits data/*.json and posts/*.md through the GitHub Contents API. */
+(function () {
+  'use strict';
+  var OWNER = 'GGRST1222', REPO = 'github.io', BRANCH = 'master';
+  var API = 'https://api.github.com/repos/' + OWNER + '/' + REPO;
+  var TOKEN_KEY = 'ggrst-admin-token';
+  var CATS = [['game', '遊戲'], ['code', '程式'], ['know', '知識']];
+  var REGIONS = [['hebra', '赫布拉'], ['woodland', '森林'], ['eldin', '艾爾汀'], ['akkala', '阿卡萊'], ['tabantha', '塔邦塔'],
+    ['ridgeland', '山丘'], ['central', '中央'], ['gerudo', '格魯德高地'], ['plateau', '初始台地'], ['lanayru', '拉聶爾'],
+    ['dueling', '雙子山'], ['hateno', '哈特諾'], ['wasteland', '格魯德沙漠'], ['lake', '海利亞湖'], ['faron', '費羅尼']];
+  var TOWER_ST = ['未開塔', '已開塔', '已探索'];
+
+  var app = document.getElementById('app');
+  var state = { token: null, tab: 'posts', posts: null, postsSha: null, games: null, gamesSha: null, dirty: false, busy: false };
+
+  /* ---------- helpers ---------- */
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    if (attrs) for (var a in attrs) {
+      var v = attrs[a];
+      if (v == null || v === false) continue;
+      if (a === 'text') n.textContent = v;
+      else if (a === 'value') n.value = v;
+      else if (a === 'checked') n.checked = !!v;
+      else if (a.slice(0, 2) === 'on') n.addEventListener(a.slice(2), v);
+      else n.setAttribute(a, v === true ? '' : v);
+    }
+    (kids || []).forEach(function (c) { if (c != null) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return n;
+  }
+  function field(label, input, hint) {
+    return el('label', { class: 'f' }, [label, hint ? el('span', { class: 'hint', text: hint }) : null, input]);
+  }
+  function b64encode(str) {
+    var bytes = new TextEncoder().encode(str), bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  function b64decode(b64) {
+    var bin = atob(b64.replace(/\s/g, '')), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function today() {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  var toastTimer;
+  function toast(msg, bad, link) {
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : '');
+    if (link) { t.appendChild(document.createTextNode(' ')); t.appendChild(el('a', { href: link[1], target: '_blank', rel: 'noopener', text: link[0] })); }
+    t.hidden = false; clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, bad ? 9000 : 6000);
+  }
+  function setDirty(v) { state.dirty = v; }
+  window.addEventListener('beforeunload', function (e) { if (state.dirty) { e.preventDefault(); e.returnValue = ''; } });
+  function leaveOk() { return !state.dirty || window.confirm('有尚未儲存的變更，確定要離開這個編輯畫面嗎？'); }
+  function commitMsg(text) {
+    return '[version]: main [bugtrack id]: [priority]: [problem]: content update [solution]: ' + text + ' (via admin)';
+  }
+
+  /* ---------- GitHub API ---------- */
+  function gh(method, path, body) {
+    return fetch(API + path, {
+      method: method,
+      headers: { 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store'
+    }).then(function (r) {
+      if (r.ok) return r.status === 204 ? null : r.json();
+      var e = new Error('HTTP ' + r.status); e.status = r.status; throw e;
+    });
+  }
+  function explain(e) {
+    if (!e || !e.status) return '連不上 GitHub，請檢查網路後再試一次。';
+    if (e.status === 401) return '登入已失效（token 無效或過期），請重新登入。';
+    if (e.status === 403) return 'Token 沒有寫入權限，或 GitHub 暫時限制了請求次數。請確認 Contents 權限是 Read and write。';
+    if (e.status === 404) return '找不到檔案或 repo。請確認 token 有 ' + OWNER + '/' + REPO + ' 的權限。';
+    if (e.status === 409 || e.status === 422) return '檔案在別處被改過了。已重新載入最新資料，請再改一次。';
+    return 'GitHub 回應錯誤（' + e.status + '），請稍後再試。';
+  }
+  function getFile(path) {
+    return gh('GET', '/contents/' + path + '?ref=' + BRANCH).then(function (f) { return { text: b64decode(f.content), sha: f.sha }; });
+  }
+  function putFile(path, text, sha, msg) {
+    return gh('PUT', '/contents/' + path, { message: msg, content: b64encode(text), sha: sha || undefined, branch: BRANCH })
+      .then(function (r) { return r.content.sha; });
+  }
+  function delFile(path, sha, msg) { return gh('DELETE', '/contents/' + path, { message: msg, sha: sha, branch: BRANCH }); }
+  function loadData() {
+    return Promise.all([getFile('data/posts.json'), getFile('data/games.json')]).then(function (r) {
+      state.posts = JSON.parse(r[0].text); state.postsSha = r[0].sha;
+      state.games = JSON.parse(r[1].text); state.gamesSha = r[1].sha;
+    });
+  }
+  function onFail(e) {
+    toast(explain(e), true);
+    if (e && e.status === 401) return logout();
+    if (e && (e.status === 409 || e.status === 422)) loadData().then(function () { setDirty(false); renderList(); }).catch(function () {});
+  }
+  function busy(btn, on, label) {
+    state.busy = on;
+    if (!btn) return;
+    if (on) { btn.dataset.label = btn.textContent; btn.textContent = label || '儲存中…'; btn.disabled = true; }
+    else { btn.textContent = btn.dataset.label || btn.textContent; btn.disabled = false; }
+  }
+  function saved() { toast('已儲存。網站約 1 分鐘後更新。', false, ['看網站', '../']); }
+
+  /* ---------- login ---------- */
+  function readToken() {
+    try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+  }
+  function storeToken(tok, remember) {
+    try {
+      sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY);
+      if (tok) (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, tok);
+    } catch (e) {}
+  }
+  function logout() {
+    if (!leaveOk()) return;
+    storeToken(null); state.token = null; setDirty(false);
+    document.getElementById('topnav').hidden = true;
+    renderLogin();
+  }
+  document.getElementById('logout').addEventListener('click', logout);
+
+  function renderLogin(errMsg) {
+    app.innerHTML = '';
+    var tok = el('input', { type: 'password', id: 'tok', autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'tokErr' });
+    var rem = el('input', { type: 'checkbox' });
+    var err = el('p', { class: 'err', id: 'tokErr', text: errMsg || '' });
+    var btn = el('button', { type: 'submit', class: 'btn btn-solid', text: '登入' });
+    var form = el('form', { class: 'stack', onsubmit: function (e) {
+      e.preventDefault();
+      var v = tok.value.trim();
+      if (!v) { err.textContent = '請貼上 token。'; tok.setAttribute('aria-invalid', 'true'); tok.focus(); return; }
+      state.token = v; busy(btn, true, '確認中…');
+      gh('GET', '').then(function (repo) {
+        if (!repo.permissions || !repo.permissions.push) { var e2 = new Error('ro'); e2.status = 403; throw e2; }
+        state.busy = false; storeToken(v, rem.checked); return start();
+      }).catch(function (e) {
+        busy(btn, false); state.token = null;
+        err.textContent = explain(e); tok.setAttribute('aria-invalid', 'true'); tok.focus();
+      });
+    } }, [
+      field('GitHub token', tok),
+      el('label', { class: 'chk' }, [rem, '在這台裝置記住我']),
+      err, el('div', {}, [btn])
+    ]);
+    app.appendChild(el('div', { class: 'login panel stack' }, [
+      el('h1', { text: '後台登入' }),
+      el('p', { class: 'muted', style: 'margin:0', text: '用 GitHub token 登入。儲存時會直接 commit 到 ' + OWNER + '/' + REPO + '，網站約 1 分鐘後更新。' }),
+      form,
+      el('details', {}, [
+        el('summary', { style: 'cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center', text: '怎麼取得 token？' }),
+        el('ol', {}, [
+          el('li', {}, ['打開 ', el('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener', text: 'GitHub 新增 fine-grained token' })]),
+          el('li', { text: 'Repository access 選「Only select repositories」，只勾 ' + OWNER + '/' + REPO }),
+          el('li', { text: 'Permissions → Repository permissions → Contents 設為「Read and write」' }),
+          el('li', { text: '產生後複製 token，貼到上面' })
+        ]),
+        el('p', { class: 'muted', text: '沒勾「記住我」時，關掉分頁就會登出。不要在公用電腦勾選。' })
+      ])
+    ]));
+    tok.focus();
+  }
+
+  function start() {
+    app.innerHTML = '';
+    app.appendChild(el('p', { class: 'muted', text: '讀取資料中…' }));
+    return loadData().then(function () {
+      document.getElementById('topnav').hidden = false;
+      renderList();
+    }).catch(function (e) {
+      if (e && e.status === 401) { storeToken(null); state.token = null; renderLogin(explain(e)); return; }
+      app.innerHTML = '';
+      app.appendChild(el('p', { class: 'err', text: explain(e) + ' ' }));
+      app.appendChild(el('button', { type: 'button', class: 'btn btn-line', text: '重試', onclick: start }));
+    });
+  }
+
+  /* ---------- list screens ---------- */
+  function shell(title, actions, body) {
+    app.innerHTML = '';
+    var tabs = el('div', { class: 'tabs', role: 'tablist', 'aria-label': '內容類型' });
+    [['posts', '文章'], ['games', '遊戲存檔']].forEach(function (t) {
+      tabs.appendChild(el('button', { type: 'button', role: 'tab', 'aria-selected': state.tab === t[0] ? 'true' : 'false',
+        text: t[1], onclick: function () { if (!leaveOk()) return; setDirty(false); state.tab = t[0]; renderList(); } }));
+    });
+    app.appendChild(el('div', { class: 'stack' }, [
+      el('div', { class: 'bar' }, [el('h1', { text: '後台' }), tabs]),
+      el('div', { class: 'bar' }, [el('h2', { text: title }), actions]),
+      body
+    ]));
+  }
+  function armDelete(btn, run) {
+    btn.addEventListener('click', function () {
+      if (state.busy) return;
+      if (!btn.classList.contains('armed')) {
+        btn.classList.add('armed'); btn.dataset.label = btn.textContent; btn.textContent = '再按一次確認刪除';
+        setTimeout(function () { if (btn.isConnected && btn.classList.contains('armed') && !btn.disabled) { btn.classList.remove('armed'); btn.textContent = btn.dataset.label; } }, 4000);
+        return;
+      }
+      btn.classList.remove('armed'); run();
+    });
+  }
+  function renderList() {
+    if (state.tab === 'posts') {
+      var posts = state.posts.slice().sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+      var ul = el('ul', { class: 'list' });
+      if (!posts.length) ul.appendChild(el('li', { class: 'empty', style: 'display:block', text: '還沒有文章。按「新增文章」寫第一篇。' }));
+      posts.forEach(function (p) {
+        var del = el('button', { type: 'button', class: 'btn btn-danger', text: '刪除' });
+        armDelete(del, function () { deletePost(p, del); });
+        var cat = (CATS.filter(function (c) { return c[0] === p.cat; })[0] || ['', ''])[1];
+        ul.appendChild(el('li', {}, [
+          el('div', {}, [el('div', { class: 't', text: (p.title && p.title.zh) || p.slug }), el('div', { class: 's', text: [cat, p.date, p.slug].filter(Boolean).join(' · ') })]),
+          el('div', { class: 'acts' }, [el('button', { type: 'button', class: 'btn btn-line', text: '編輯', onclick: function () { editPost(p); } }), del])
+        ]));
+      });
+      shell('文章', el('button', { type: 'button', class: 'btn btn-solid', text: '新增文章', onclick: function () { editPost(null); } }), ul);
+    } else {
+      var gl = el('ul', { class: 'list' });
+      if (!state.games.length) gl.appendChild(el('li', { class: 'empty', style: 'display:block', text: '還沒有遊戲存檔。按「新增遊戲」建立第一個。' }));
+      state.games.forEach(function (g, i) {
+        var done = (g.milestones || []).filter(function (m) { return m.done; }).length, tot = (g.milestones || []).length;
+        var del = el('button', { type: 'button', class: 'btn btn-danger', text: '刪除' });
+        armDelete(del, function () { deleteGame(i, del); });
+        gl.appendChild(el('li', {}, [
+          el('div', {}, [el('div', { class: 't', text: g.name.zh || g.name.en }), el('div', { class: 's', text: [g.platform, '里程碑 ' + done + '/' + tot].filter(Boolean).join(' · ') })]),
+          el('div', { class: 'acts' }, [el('button', { type: 'button', class: 'btn btn-line', text: '編輯', onclick: function () { editGame(i); } }), del])
+        ]));
+      });
+      shell('遊戲存檔', el('button', { type: 'button', class: 'btn btn-solid', text: '新增遊戲', onclick: function () { editGame(-1); } }), gl);
+    }
+  }
+
+  /* ---------- posts ---------- */
+  function editPost(p) {
+    var isNew = !p;
+    var slug = el('input', { type: 'text', value: p ? p.slug : '', readonly: !isNew, spellcheck: 'false', autocomplete: 'off' });
+    var cat = el('select', {}, CATS.map(function (c) { return el('option', { value: c[0], text: c[1] }); }));
+    cat.value = p ? p.cat : 'game';
+    var date = el('input', { type: 'date', value: p ? p.date : today() });
+    var tz = el('input', { type: 'text', value: p ? p.title.zh : '' }), te = el('input', { type: 'text', value: p ? (p.title.en || '') : '' });
+    var ez = el('textarea', { rows: '2', value: p ? (p.excerpt.zh || '') : '' }), ee = el('textarea', { rows: '2', value: p ? (p.excerpt.en || '') : '' });
+    var body = el('textarea', { class: 'md', spellcheck: 'false', value: '' });
+    var err = el('p', { class: 'err', role: 'alert' });
+    var save = el('button', { type: 'submit', class: 'btn btn-solid', text: isNew ? '發佈文章' : '儲存變更' });
+    var bodySha = null;
+
+    var form = el('form', { class: 'panel stack', oninput: function () { setDirty(true); }, onsubmit: function (e) {
+      e.preventDefault(); if (state.busy) return;
+      err.textContent = ''; [slug, tz, body].forEach(function (n) { n.removeAttribute('aria-invalid'); });
+      var s = slug.value.trim().toLowerCase();
+      var bad = function (n, m) { err.textContent = m; n.setAttribute('aria-invalid', 'true'); n.focus(); };
+      if (!/^[a-z0-9][a-z0-9-]{0,80}$/.test(s)) return bad(slug, '網址代稱只能用小寫英文、數字和連字號，例如 botw-first-week。');
+      if (isNew && state.posts.some(function (x) { return x.slug === s; })) return bad(slug, '已經有文章用了「' + s + '」，請換一個網址代稱。');
+      if (!tz.value.trim()) return bad(tz, '請填中文標題。');
+      if (!body.value.trim()) return bad(body, '內文是空的，請先寫點內容。');
+      var meta = { slug: s, cat: cat.value, date: date.value || today(),
+        title: { zh: tz.value.trim(), en: te.value.trim() }, excerpt: { zh: ez.value.trim(), en: ee.value.trim() } };
+      var next = state.posts.filter(function (x) { return x.slug !== s; }).concat([meta]);
+      busy(save, true);
+      putFile('posts/' + s + '.md', body.value.replace(/\r\n/g, '\n'), bodySha, commitMsg((isNew ? 'add' : 'update') + ' post ' + s))
+        .then(function (sha) { bodySha = sha; return putFile('data/posts.json', JSON.stringify(next, null, 2) + '\n', state.postsSha, commitMsg('update post index for ' + s)); })
+        .then(function (sha) { state.posts = next; state.postsSha = sha; setDirty(false); busy(save, false); saved(); renderList(); })
+        .catch(function (e) { busy(save, false); onFail(e); });
+    } }, [
+      el('div', { class: 'grid2' }, [field('中文標題', tz), field('英文標題', te, '可留空，英文版會改用中文標題')]),
+      el('div', { class: 'grid2' }, [field('中文摘要', ez, '列表上的一句話介紹'), field('英文摘要', ee)]),
+      el('div', { class: 'grid2' }, [field('分類', cat), field('日期', date)]),
+      field('網址代稱', slug, isNew ? '文章網址會是 ggrst.io/post.html?p=這個值，建立後不能改' : '建立後不能修改'),
+      field('內文（Markdown）', body, '支援標題、清單、連結、圖片、程式碼區塊'),
+      err,
+      el('div', { class: 'acts' }, [save, el('button', { type: 'button', class: 'btn btn-line', text: '取消', onclick: function () { if (leaveOk()) { setDirty(false); renderList(); } } })])
+    ]);
+    app.innerHTML = '';
+    app.appendChild(el('div', { class: 'stack' }, [el('h1', { text: isNew ? '新增文章' : '編輯文章' }), form]));
+    if (!isNew) {
+      body.disabled = true; body.value = '讀取內文中…'; save.disabled = true;
+      getFile('posts/' + p.slug + '.md').then(function (f) { body.value = f.text; bodySha = f.sha; })
+        .catch(function (e) { body.value = ''; if (!(e && e.status === 404)) toast(explain(e), true); })
+        .then(function () { body.disabled = false; save.disabled = false; });
+    }
+    (isNew ? tz : body).focus();
+  }
+
+  function deletePost(p, btn) {
+    busy(btn, true, '刪除中…');
+    var next = state.posts.filter(function (x) { return x.slug !== p.slug; });
+    putFile('data/posts.json', JSON.stringify(next, null, 2) + '\n', state.postsSha, commitMsg('remove post ' + p.slug + ' from index'))
+      .then(function (sha) {
+        state.posts = next; state.postsSha = sha;
+        return getFile('posts/' + p.slug + '.md').then(function (f) { return delFile('posts/' + p.slug + '.md', f.sha, commitMsg('delete post ' + p.slug)); })
+          .catch(function (e) { if (!(e && e.status === 404)) throw e; });
+      })
+      .then(function () { busy(btn, false); toast('已刪除「' + ((p.title && p.title.zh) || p.slug) + '」。'); renderList(); })
+      .catch(function (e) { busy(btn, false); onFail(e); renderList(); });
+  }
+
+  /* ---------- games ---------- */
+  function saveGames(next, btn, msg) {
+    busy(btn, true);
+    return putFile('data/games.json', JSON.stringify(next, null, 2) + '\n', state.gamesSha, commitMsg(msg))
+      .then(function (sha) { state.games = next; state.gamesSha = sha; setDirty(false); busy(btn, false); saved(); renderList(); })
+      .catch(function (e) { busy(btn, false); onFail(e); });
+  }
+  function deleteGame(i, btn) {
+    var g = state.games[i], next = state.games.slice(); next.splice(i, 1);
+    saveGames(next, btn, 'delete game ' + g.id);
+  }
+
+  function editGame(i) {
+    var isNew = i < 0;
+    var g = isNew ? { id: '', name: { zh: '', en: '' }, platform: 'Switch', milestones: [], collect: [], note: { zh: '', en: '' } }
+      : JSON.parse(JSON.stringify(state.games[i]));
+    var nz = el('input', { type: 'text', value: g.name.zh }), ne = el('input', { type: 'text', value: g.name.en || '' });
+    var plat = el('input', { type: 'text', value: g.platform || '', list: 'plats' });
+    var plats = el('datalist', { id: 'plats' }, ['Switch', 'Switch 2', 'PC', 'PS5', 'Xbox', '手機'].map(function (x) { return el('option', { value: x }); }));
+    var gid = el('input', { type: 'text', value: g.id, readonly: !isNew, spellcheck: 'false', autocomplete: 'off' });
+    var noteZ = el('textarea', { rows: '3', value: (g.note && g.note.zh) || '' }), noteE = el('textarea', { rows: '3', value: (g.note && g.note.en) || '' });
+    var err = el('p', { class: 'err', role: 'alert' });
+    var save = el('button', { type: 'submit', class: 'btn btn-solid', text: isNew ? '建立存檔' : '儲存變更' });
+
+    var msRows = el('div', { class: 'rows' });
+    function addMs(m) {
+      var done = el('input', { type: 'checkbox', checked: m.done }), z = el('input', { type: 'text', value: m.zh || '', 'aria-label': '里程碑中文' }),
+        e = el('input', { type: 'text', value: m.en || '', 'aria-label': '里程碑英文' });
+      var row = el('div', { class: 'row ms' }, [el('label', { class: 'chk' }, [done, el('span', { class: 'sr', text: '完成' })]), z, e,
+        el('button', { type: 'button', class: 'x', 'aria-label': '移除這個里程碑', text: '×', onclick: function () { row.remove(); setDirty(true); } })]);
+      row._get = function () { return { zh: z.value.trim(), en: e.value.trim(), done: done.checked }; };
+      msRows.appendChild(row); return z;
+    }
+    (g.milestones || []).forEach(addMs);
+
+    var coRows = el('div', { class: 'rows' });
+    function addCo(c) {
+      var z = el('input', { type: 'text', value: c.zh || '', 'aria-label': '收集項目中文' }), e = el('input', { type: 'text', value: c.en || '', 'aria-label': '收集項目英文' });
+      var got = el('input', { type: 'number', min: '0', inputmode: 'numeric', value: String(c.got || 0) });
+      var max = el('input', { type: 'number', min: '1', inputmode: 'numeric', value: String(c.max || '') });
+      var row = el('div', { class: 'row co' }, [z, e,
+        el('label', { class: 'f' }, [el('span', { class: 'sr nl', text: '已收集' }), got]),
+        el('label', { class: 'f' }, [el('span', { class: 'sr nl', text: '總數' }), max]),
+        el('button', { type: 'button', class: 'x', 'aria-label': '移除這個收集項目', text: '×', onclick: function () { row.remove(); setDirty(true); } })]);
+      row._get = function () { return { zh: z.value.trim(), en: e.value.trim(), got: parseInt(got.value, 10) || 0, max: parseInt(max.value, 10) || 0, _n: [got, max] }; };
+      coRows.appendChild(row); return z;
+    }
+    (g.collect || []).forEach(addCo);
+
+    var towerSel = {};
+    var towers = null;
+    if (g.map === 'botw') {
+      towers = el('div', { class: 'towers' }, REGIONS.map(function (r) {
+        var s = el('select', {}, TOWER_ST.map(function (t, k) { return el('option', { value: String(k), text: t }); }));
+        s.value = String((g.towers && g.towers[r[0]]) || 0); towerSel[r[0]] = s;
+        return field(r[1], s);
+      }));
+    }
+
+    var form = el('form', { class: 'panel stack', oninput: function () { setDirty(true); }, onchange: function () { setDirty(true); }, onsubmit: function (ev) {
+      ev.preventDefault(); if (state.busy) return;
+      err.textContent = '';
+      form.querySelectorAll('[aria-invalid]').forEach(function (n) { n.removeAttribute('aria-invalid'); });
+      var bad = function (n, m) { err.textContent = m; n.setAttribute('aria-invalid', 'true'); n.focus(); };
+      var id = gid.value.trim().toLowerCase();
+      if (!nz.value.trim()) return bad(nz, '請填中文名稱。');
+      if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(id)) return bad(gid, '代號只能用小寫英文、數字和連字號，例如 totk。');
+      if (isNew && state.games.some(function (x) { return x.id === id; })) return bad(gid, '已經有遊戲用了代號「' + id + '」。');
+      var ms = Array.prototype.map.call(msRows.children, function (r) { return r._get(); }).filter(function (m) { return m.zh || m.en; });
+      var co = [];
+      for (var k = 0; k < coRows.children.length; k++) {
+        var c = coRows.children[k]._get();
+        if (!c.zh && !c.en) continue;
+        if (c.max < 1) return bad(c._n[1], '「' + (c.zh || c.en) + '」的總數要大於 0。');
+        if (c.got > c.max) return bad(c._n[0], '「' + (c.zh || c.en) + '」已收集 ' + c.got + '，超過總數 ' + c.max + '。');
+        delete c._n; co.push(c);
+      }
+      var out = { id: id, name: { zh: nz.value.trim(), en: ne.value.trim() }, platform: plat.value.trim(), milestones: ms, collect: co,
+        note: { zh: noteZ.value.trim(), en: noteE.value.trim() } };
+      if (g.map) {
+        out.map = g.map; out.towers = {};
+        Object.keys(towerSel).forEach(function (key) { var v = +towerSel[key].value; if (v) out.towers[key] = v; });
+      }
+      var next = state.games.slice();
+      if (isNew) next.push(out); else next[i] = out;
+      saveGames(next, save, (isNew ? 'add game ' : 'update game ') + id);
+    } }, [
+      el('div', { class: 'grid2' }, [field('中文名稱', nz), field('英文名稱', ne)]),
+      el('div', { class: 'grid2' }, [field('平台', plat), field('代號', gid, isNew ? '網址用，例如 totk，建立後不能改' : '建立後不能修改')]), plats,
+      el('fieldset', { class: 'stack' }, [el('legend', { text: '里程碑' }),
+        el('p', { class: 'muted', style: 'margin:0', text: '勾選代表已完成。完成比例就是首頁顯示的百分比。' }),
+        msRows,
+        el('div', {}, [el('button', { type: 'button', class: 'btn btn-line', text: '新增里程碑', onclick: function () { addMs({}).focus(); setDirty(true); } })])]),
+      el('fieldset', { class: 'stack' }, [el('legend', { text: '收集' }),
+        el('div', { class: 'row-head', style: 'grid-template-columns:minmax(0,1fr) minmax(0,1fr) 96px 96px 44px' }, ['中文', '英文', '已收集', '總數', '']),
+        coRows,
+        el('div', {}, [el('button', { type: 'button', class: 'btn btn-line', text: '新增收集項目', onclick: function () { addCo({}).focus(); setDirty(true); } })])]),
+      towers ? el('fieldset', { class: 'stack' }, [el('legend', { text: '海拉魯地圖塔區' }), towers]) : null,
+      el('div', { class: 'grid2' }, [field('最近進度（中文）', noteZ, '顯示在首頁存檔上'), field('最近進度（英文）', noteE)]),
+      err,
+      el('div', { class: 'acts' }, [save, el('button', { type: 'button', class: 'btn btn-line', text: '取消', onclick: function () { if (leaveOk()) { setDirty(false); renderList(); } } })])
+    ]);
+    app.innerHTML = '';
+    app.appendChild(el('div', { class: 'stack' }, [el('h1', { text: isNew ? '新增遊戲' : '編輯「' + (g.name.zh || g.id) + '」' }), form]));
+    nz.focus();
+  }
+
+  /* ---------- boot ---------- */
+  state.token = readToken();
+  if (state.token) start(); else renderLogin();
+})();

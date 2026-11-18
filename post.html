@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文章 · ggrst.io</title>
+<meta name="theme-color" content="#1C2140">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<style>
+.post{max-width:72ch;margin:0 auto;padding:64px 24px 120px}
+.back{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:700;color:var(--mute);text-decoration:none}
+.back:hover{color:var(--cobalt)}
+.post-head{margin:24px 0 40px;padding-bottom:28px;border-bottom:1.5px solid var(--ink)}
+.post-meta{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:14px;color:var(--mute)}
+.cat{display:inline-flex;align-items:center;gap:8px;font-weight:700;color:var(--ink)}
+.cat i{width:10px;height:10px;border-radius:3px}
+.cat i.know{border:2px solid var(--ink)}
+.post h1{margin-top:14px;font-size:clamp(32px,5vw,52px);font-weight:900;font-stretch:112%}
+.prose{font-size:18px;line-height:1.8}
+.prose h2{margin:2em 0 .6em;font-size:28px}
+.prose h3{margin:1.6em 0 .5em;font-size:22px}
+.prose p,.prose ul,.prose ol,.prose blockquote,.prose pre,.prose table{margin:0 0 1.2em}
+.prose a{color:var(--cobalt);font-weight:600}
+.prose img{max-width:100%;height:auto;border-radius:12px}
+.prose blockquote{padding:4px 0 4px 18px;border-left:1px solid var(--ink);color:var(--mute)}
+.prose code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.88em;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.1em .4em}
+.prose pre{background:var(--screen);color:var(--on-screen);border-radius:14px;padding:18px 20px;overflow-x:auto}
+.prose pre code{background:none;border:0;padding:0;color:inherit}
+.prose table{border-collapse:collapse;width:100%;display:block;overflow-x:auto}
+.prose th,.prose td{border-bottom:1px solid var(--line);padding:8px 12px;text-align:left}
+.prose hr{border:0;border-top:1px solid var(--line);margin:2.4em 0}
+.msg{color:var(--mute)}
+.msg a{color:var(--cobalt);font-weight:700}
+@media (max-width:640px){.post{padding:40px 16px 96px}.prose{font-size:17px}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到主內容</a>
+<header class="site-head">
+<div class="wrap">
+<a href="./" class="logo" aria-label="ggrst.io 首頁">ggrst<span>.io</span></a>
+<nav class="site-nav" aria-label="主選單">
+<a href="./#posts">任務日誌</a>
+<a href="./#games">遊戲</a>
+</nav>
+</div>
+</header>
+<main id="main" tabindex="-1">
+<article class="post">
+<a class="back" href="./#posts"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>回任務日誌</a>
+<div id="out" aria-live="polite"><p class="msg">讀取文章中…</p></div>
+</article>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = document.getElementById('out');
+  var slug = new URLSearchParams(location.search).get('p') || '';
+  var CAT = { game: '遊戲', code: '程式', know: '知識' };
+
+  function msg(text, withLink) {
+    out.innerHTML = '';
+    var p = document.createElement('p'); p.className = 'msg'; p.textContent = text + ' ';
+    if (withLink) { var a = document.createElement('a'); a.href = './#posts'; a.textContent = '看其他文章'; p.appendChild(a); }
+    out.appendChild(p);
+  }
+  if (!/^[a-z0-9][a-z0-9-]{0,80}$/.test(slug)) { msg('找不到這篇文章。', true); return; }
+
+  function get(url, json) {
+    return fetch(url, { cache: 'no-cache' }).then(function (r) {
+      if (r.status === 404) { var e = new Error('404'); e.notFound = true; throw e; }
+      if (!r.ok) throw new Error(r.status);
+      return json ? r.json() : r.text();
+    });
+  }
+
+  Promise.all([get('data/posts.json', true), get('posts/' + slug + '.md', false)]).then(function (res) {
+    var meta = (res[0] || []).filter(function (p) { return p.slug === slug; })[0];
+    if (!meta) { msg('找不到這篇文章。', true); return; }
+    var title = (meta.title && (meta.title.zh || meta.title.en)) || slug;
+    document.title = title + ' · ggrst.io';
+    var html = window.marked && window.DOMPurify
+      ? DOMPurify.sanitize(marked.parse(res[1]))
+      : null;
+
+    out.innerHTML = '';
+    var head = document.createElement('header'); head.className = 'post-head';
+    var m = document.createElement('div'); m.className = 'post-meta';
+    var cat = document.createElement('span'); cat.className = 'cat';
+    var dot = document.createElement('i');
+    var c = CAT[meta.cat] ? meta.cat : 'know';
+    if (c === 'know') dot.className = 'know'; else dot.style.background = c === 'game' ? 'var(--amber)' : 'var(--cobalt)';
+    cat.appendChild(dot); cat.appendChild(document.createTextNode(CAT[c]));
+    var time = document.createElement('time'); time.className = 'num'; time.dateTime = meta.date || ''; time.textContent = meta.date || '';
+    m.appendChild(cat); m.appendChild(time);
+    var h1 = document.createElement('h1'); h1.textContent = title;
+    head.appendChild(m); head.appendChild(h1);
+    var body = document.createElement('div'); body.className = 'prose';
+    if (html != null) body.innerHTML = html;
+    else { var pre = document.createElement('p'); pre.style.whiteSpace = 'pre-wrap'; pre.textContent = res[1]; body.appendChild(pre); }
+    out.appendChild(head); out.appendChild(body);
+  }).catch(function (e) {
+    if (e && e.notFound) msg('找不到這篇文章。', true);
+    else msg('讀取文章失敗，請檢查網路後重新整理。', false);
+  });
+})();
+</script>
+</body>
+</html>
