@@ -1,0 +1,60 @@
+[
+  {
+    "id": "botw",
+    "name": { "zh": "薩爾達傳說 曠野之息", "en": "The Legend of Zelda: Breath of the Wild" },
+    "platform": "Switch",
+    "map": "botw",
+    "milestones": [
+      { "zh": "解放水之神獸（卓拉領地）", "en": "Free the water Divine Beast (Zora’s Domain)", "done": false },
+      { "zh": "解放風之神獸（利特村）", "en": "Free the wind Divine Beast (Rito Village)", "done": false },
+      { "zh": "解放火之神獸（死亡之山）", "en": "Free the fire Divine Beast (Death Mountain)", "done": false },
+      { "zh": "解放雷之神獸（格魯德沙漠）", "en": "Free the lightning Divine Beast (Gerudo Desert)", "done": false },
+      { "zh": "擊敗災厄加儂", "en": "Defeat Calamity Ganon", "done": false }
+    ],
+    "collect": [
+      { "zh": "神廟", "en": "Shrines", "got": 0, "max": 120 },
+      { "zh": "克洛格種子", "en": "Korok seeds", "got": 0, "max": 900 }
+    ],
+    "note": { "zh": "", "en": "" },
+    "towers": {}
+  },
+  {
+    "id": "acnh",
+    "name": { "zh": "集合啦！動物森友會", "en": "Animal Crossing: New Horizons" },
+    "platform": "Switch",
+    "milestones": [
+      { "zh": "博物館開館", "en": "Open the museum", "done": false },
+      { "zh": "蓋好商店", "en": "Build the shop", "done": false },
+      { "zh": "蓋好裁縫店", "en": "Build the tailor shop", "done": false },
+      { "zh": "舉辦 K.K. 演唱會", "en": "Host the K.K. concert", "done": false },
+      { "zh": "島嶼評價五星", "en": "Reach a 5-star island rating", "done": false }
+    ],
+    "collect": [
+      { "zh": "魚類", "en": "Fish", "got": 0, "max": 80 },
+      { "zh": "昆蟲", "en": "Bugs", "got": 0, "max": 80 },
+      { "zh": "海洋生物", "en": "Sea creatures", "got": 0, "max": 40 },
+      { "zh": "化石", "en": "Fossils", "got": 0, "max": 73 },
+      { "zh": "藝術品", "en": "Art", "got": 0, "max": 43 }
+    ],
+    "note": { "zh": "", "en": "" }
+  },
+  {
+    "id": "oot",
+    "name": { "zh": "薩爾達傳說 時之笛", "en": "The Legend of Zelda: Ocarina of Time" },
+    "platform": "Switch",
+    "milestones": [
+      { "zh": "取得三顆精靈石", "en": "Collect the three Spiritual Stones", "done": false },
+      { "zh": "通關 森林神殿", "en": "Clear the Forest Temple", "done": false },
+      { "zh": "通關 火之神殿", "en": "Clear the Fire Temple", "done": false },
+      { "zh": "通關 水之神殿", "en": "Clear the Water Temple", "done": false },
+      { "zh": "通關 暗影神殿", "en": "Clear the Shadow Temple", "done": false },
+      { "zh": "通關 魂之神殿", "en": "Clear the Spirit Temple", "done": false },
+      { "zh": "擊敗加儂", "en": "Defeat Ganon", "done": false }
+    ],
+    "collect": [
+      { "zh": "黃金蜘蛛", "en": "Gold Skulltulas", "got": 0, "max": 100 },
+      { "zh": "心之碎片", "en": "Pieces of Heart", "got": 0, "max": 36 }
+    ],
+    "note": { "zh": "", "en": "" }
+  }
+]

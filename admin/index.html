@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.github.com; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>後台 · ggrst.io</title>
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+body{font-size:16px}
+.admin{max-width:980px;margin:0 auto;padding:40px 24px 120px}
+h1{font-size:32px;font-stretch:112%}
+h2{font-size:22px}
+.muted{color:var(--mute)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:28px}
+.login{max-width:560px;margin:48px auto 0}
+.login ol{padding-left:1.3em;margin:12px 0 0}
+.login li{margin:4px 0}
+.login a{color:var(--cobalt);font-weight:600}
+label.f{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px}
+label.f .hint{font-weight:500;color:var(--mute)}
+input[type=text],input[type=password],input[type=date],input[type=number],textarea,select{width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:16px;font-weight:500}
+textarea{line-height:1.6;resize:vertical}
+textarea.md{min-height:360px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:15px}
+input:focus,textarea:focus,select:focus{border-color:var(--cobalt);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--cobalt) 25%,transparent)}
+input[aria-invalid=true],textarea[aria-invalid=true]{border-color:var(--danger)}
+.err{color:var(--danger);font-weight:600;font-size:14px;margin:0}
+.err:empty{display:none}
+.chk{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:600}
+.chk input{width:20px;height:20px;accent-color:var(--ink)}
+.stack{display:flex;flex-direction:column;gap:18px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.acts{display:flex;flex-wrap:wrap;gap:10px}
+.btn{min-height:44px;padding:0 18px;font-size:15px}
+.btn-danger{border-color:var(--danger);color:var(--danger)}
+.btn-danger:hover{background:var(--danger);color:#fff}
+.btn-danger.armed{background:var(--danger);color:#fff}
+.tabs{display:flex;gap:4px;padding:4px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.tabs button{min-height:44px;padding:0 18px;border:0;background:none;border-radius:8px;font-weight:700;color:var(--mute)}
+.tabs button[aria-selected=true]{background:var(--ink);color:var(--paper)}
+.list{margin:0;padding:0;list-style:none;border-top:1.5px solid var(--ink)}
+.list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--line)}
+.list .t{font-weight:700;font-size:17px;overflow-wrap:anywhere}
+.list .s{font-size:14px;color:var(--mute)}
+.empty{padding:28px 0;color:var(--mute);border-bottom:1px solid var(--line);margin:0}
+fieldset{border:1px solid var(--line);border-radius:14px;padding:18px;margin:0}
+legend{font-weight:800;padding:0 6px}
+.rows{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;gap:8px;align-items:center}
+.row.ms{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr) auto}
+.row.co{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 96px 96px auto}
+.row .x{min-width:44px;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--mute);display:inline-flex;align-items:center;justify-content:center}
+.row .x:hover{border-color:var(--danger);color:var(--danger)}
+.row-head{display:grid;gap:8px;font-size:13px;font-weight:700;color:var(--mute)}
+.towers{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:40;max-width:calc(100% - 32px);background:var(--ink);color:var(--paper);padding:14px 18px;border-radius:12px;font-weight:600;box-shadow:0 18px 40px -16px rgba(28,33,64,.6)}
+.toast.bad{background:var(--danger)}
+.toast a{color:var(--amber)}
+@media (max-width:720px){
+  .admin{padding:24px 16px 96px}
+  .panel{padding:20px}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .row.ms{grid-template-columns:auto minmax(0,1fr) auto;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .row.ms .chk{grid-column:1;grid-row:1/3}
+  .row.ms > input{grid-column:2}
+  .row.ms .x{grid-column:3;grid-row:1/3}
+  .row.co{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .row.co > input{grid-column:1/3}
+  .row.co .x{grid-column:3;grid-row:1/4;align-self:start}
+  .row.co .nl{position:static;width:auto;height:auto;clip:auto;font-size:13px;font-weight:700;color:var(--mute)}
+  .row-head{display:none}
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<div class="wrap">
+<a href="../" class="logo" aria-label="回到 ggrst.io 首頁">ggrst<span>.io</span></a>
+<nav class="site-nav" aria-label="後台" id="topnav" hidden>
+<a href="../" target="_blank" rel="noopener">看網站</a>
+<button class="lang-btn" type="button" id="logout">登出</button>
+</nav>
+</div>
+</header>
+<main class="admin" id="app" aria-live="polite">
+<noscript><p>後台需要 JavaScript。</p></noscript>
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="admin.js"></script>
+</body>
+</html>
