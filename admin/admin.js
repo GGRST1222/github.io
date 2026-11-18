@@ -9,6 +9,18 @@
     ['ridgeland', '山丘'], ['central', '中央'], ['gerudo', '格魯德高地'], ['plateau', '初始台地'], ['lanayru', '拉聶爾'],
     ['dueling', '雙子山'], ['hateno', '哈特諾'], ['wasteland', '格魯德沙漠'], ['lake', '海利亞湖'], ['faron', '費羅尼']];
   var TOWER_ST = ['未開塔', '已開塔', '已探索'];
+  var SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,80}$/;
+  var GAME_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,40}$/;
+  var TOAST_MS = 6000;
+  var TOAST_ERROR_MS = 9000;
+  var DELETE_CONFIRM_MS = 4000;
+  var BASE64_CHUNK = 0x8000; // keeps String.fromCharCode.apply under engine argument limits
+
+  // A <meta> CSP cannot set frame-ancestors, so refuse to run inside a frame (clickjacking).
+  if (window.top !== window.self) {
+    document.body.textContent = '後台不能在框架內開啟。';
+    return;
+  }
 
   var app = document.getElementById('app');
   var state = { token: null, tab: 'posts', posts: null, postsSha: null, games: null, gamesSha: null, dirty: false, busy: false };
@@ -33,7 +45,7 @@
   }
   function b64encode(str) {
     var bytes = new TextEncoder().encode(str), bin = '';
-    for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    for (var i = 0; i < bytes.length; i += BASE64_CHUNK) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + BASE64_CHUNK));
     return btoa(bin);
   }
   function b64decode(b64) {
@@ -51,7 +63,7 @@
     t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : '');
     if (link) { t.appendChild(document.createTextNode(' ')); t.appendChild(el('a', { href: link[1], target: '_blank', rel: 'noopener', text: link[0] })); }
     t.hidden = false; clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.hidden = true; }, bad ? 9000 : 6000);
+    toastTimer = setTimeout(function () { t.hidden = true; }, bad ? TOAST_ERROR_MS : TOAST_MS);
   }
   function setDirty(v) { state.dirty = v; }
   window.addEventListener('beforeunload', function (e) { if (state.dirty) { e.preventDefault(); e.returnValue = ''; } });
@@ -110,13 +122,17 @@
 
   /* ---------- login ---------- */
   function readToken() {
-    try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+    try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); }
+    catch (storageError) { return null; } // storage blocked: the login screen asks again
   }
   function storeToken(tok, remember) {
     try {
       sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY);
       if (tok) (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, tok);
-    } catch (e) {}
+    } catch (storageError) {
+      // Storage blocked: the session still works in memory, it just won't survive a reload.
+      console.warn('Token not persisted:', storageError.name);
+    }
   }
   function logout() {
     if (!leaveOk()) return;
@@ -200,7 +216,7 @@
       if (state.busy) return;
       if (!btn.classList.contains('armed')) {
         btn.classList.add('armed'); btn.dataset.label = btn.textContent; btn.textContent = '再按一次確認刪除';
-        setTimeout(function () { if (btn.isConnected && btn.classList.contains('armed') && !btn.disabled) { btn.classList.remove('armed'); btn.textContent = btn.dataset.label; } }, 4000);
+        setTimeout(function () { if (btn.isConnected && btn.classList.contains('armed') && !btn.disabled) { btn.classList.remove('armed'); btn.textContent = btn.dataset.label; } }, DELETE_CONFIRM_MS);
         return;
       }
       btn.classList.remove('armed'); run();
@@ -256,7 +272,7 @@
       err.textContent = ''; [slug, tz, body].forEach(function (n) { n.removeAttribute('aria-invalid'); });
       var s = slug.value.trim().toLowerCase();
       var bad = function (n, m) { err.textContent = m; n.setAttribute('aria-invalid', 'true'); n.focus(); };
-      if (!/^[a-z0-9][a-z0-9-]{0,80}$/.test(s)) return bad(slug, '網址代稱只能用小寫英文、數字和連字號，例如 botw-first-week。');
+      if (!SLUG_PATTERN.test(s)) return bad(slug, '網址代稱只能用小寫英文、數字和連字號，例如 botw-first-week。');
       if (isNew && state.posts.some(function (x) { return x.slug === s; })) return bad(slug, '已經有文章用了「' + s + '」，請換一個網址代稱。');
       if (!tz.value.trim()) return bad(tz, '請填中文標題。');
       if (!body.value.trim()) return bad(body, '內文是空的，請先寫點內容。');
@@ -309,8 +325,87 @@
       .catch(function (e) { busy(btn, false); onFail(e); });
   }
   function deleteGame(i, btn) {
-    var g = state.games[i], next = state.games.slice(); next.splice(i, 1);
+    var g = state.games[i], next = state.games.filter(function (_, k) { return k !== i; });
     saveGames(next, btn, 'delete game ' + g.id);
+  }
+
+  function removeRowButton(label, row) {
+    return el('button', { type: 'button', class: 'x', 'aria-label': label, text: '×', onclick: function () { row.remove(); setDirty(true); } });
+  }
+
+  // Each editor returns { node, add?, read } so editGame only assembles and validates.
+  function milestoneEditor(milestones) {
+    var rows = el('div', { class: 'rows' });
+    function add(milestone) {
+      var done = el('input', { type: 'checkbox', checked: milestone.done });
+      var zh = el('input', { type: 'text', value: milestone.zh || '', 'aria-label': '里程碑中文' });
+      var en = el('input', { type: 'text', value: milestone.en || '', 'aria-label': '里程碑英文' });
+      var row = el('div', { class: 'row ms' }, [el('label', { class: 'chk' }, [done, el('span', { class: 'sr', text: '完成' })]), zh, en]);
+      row.appendChild(removeRowButton('移除這個里程碑', row));
+      row.readValue = function () { return { zh: zh.value.trim(), en: en.value.trim(), done: done.checked }; };
+      rows.appendChild(row);
+      return zh;
+    }
+    milestones.forEach(add);
+    return {
+      node: rows, add: add,
+      read: function () {
+        return Array.prototype.map.call(rows.children, function (row) { return row.readValue(); })
+          .filter(function (m) { return m.zh || m.en; });
+      }
+    };
+  }
+
+  function collectEditor(items) {
+    var rows = el('div', { class: 'rows' });
+    function add(item) {
+      var zh = el('input', { type: 'text', value: item.zh || '', 'aria-label': '收集項目中文' });
+      var en = el('input', { type: 'text', value: item.en || '', 'aria-label': '收集項目英文' });
+      var got = el('input', { type: 'number', min: '0', inputmode: 'numeric', value: String(item.got || 0) });
+      var max = el('input', { type: 'number', min: '1', inputmode: 'numeric', value: String(item.max || '') });
+      var row = el('div', { class: 'row co' }, [zh, en,
+        el('label', { class: 'f' }, [el('span', { class: 'sr nl', text: '已收集' }), got]),
+        el('label', { class: 'f' }, [el('span', { class: 'sr nl', text: '總數' }), max])]);
+      row.appendChild(removeRowButton('移除這個收集項目', row));
+      row.readValue = function () {
+        return { value: { zh: zh.value.trim(), en: en.value.trim(), got: parseInt(got.value, 10) || 0, max: parseInt(max.value, 10) || 0 },
+          gotInput: got, maxInput: max };
+      };
+      rows.appendChild(row);
+      return zh;
+    }
+    items.forEach(add);
+    // Returns { items } or { error, input } for the first invalid row.
+    function read() {
+      var result = [];
+      for (var k = 0; k < rows.children.length; k++) {
+        var entry = rows.children[k].readValue(), item = entry.value, name = item.zh || item.en;
+        if (!name) continue;
+        if (item.max < 1) return { error: '「' + name + '」的總數要大於 0。', input: entry.maxInput };
+        if (item.got > item.max) return { error: '「' + name + '」已收集 ' + item.got + '，超過總數 ' + item.max + '。', input: entry.gotInput };
+        result.push(item);
+      }
+      return { items: result };
+    }
+    return { node: rows, add: add, read: read };
+  }
+
+  function towerEditor(towers) {
+    var selects = {};
+    var node = el('div', { class: 'towers' }, REGIONS.map(function (region) {
+      var select = el('select', {}, TOWER_ST.map(function (label, level) { return el('option', { value: String(level), text: label }); }));
+      select.value = String((towers && towers[region[0]]) || 0);
+      selects[region[0]] = select;
+      return field(region[1], select);
+    }));
+    return {
+      node: node,
+      read: function () {
+        var out = {};
+        Object.keys(selects).forEach(function (key) { var level = +selects[key].value; if (level) out[key] = level; });
+        return out;
+      }
+    };
   }
 
   function editGame(i) {
@@ -324,81 +419,41 @@
     var noteZ = el('textarea', { rows: '3', value: (g.note && g.note.zh) || '' }), noteE = el('textarea', { rows: '3', value: (g.note && g.note.en) || '' });
     var err = el('p', { class: 'err', role: 'alert' });
     var save = el('button', { type: 'submit', class: 'btn btn-solid', text: isNew ? '建立存檔' : '儲存變更' });
+    var milestones = milestoneEditor(g.milestones || []);
+    var collection = collectEditor(g.collect || []);
+    var towers = g.map === 'botw' ? towerEditor(g.towers) : null;
+    var form;
 
-    var msRows = el('div', { class: 'rows' });
-    function addMs(m) {
-      var done = el('input', { type: 'checkbox', checked: m.done }), z = el('input', { type: 'text', value: m.zh || '', 'aria-label': '里程碑中文' }),
-        e = el('input', { type: 'text', value: m.en || '', 'aria-label': '里程碑英文' });
-      var row = el('div', { class: 'row ms' }, [el('label', { class: 'chk' }, [done, el('span', { class: 'sr', text: '完成' })]), z, e,
-        el('button', { type: 'button', class: 'x', 'aria-label': '移除這個里程碑', text: '×', onclick: function () { row.remove(); setDirty(true); } })]);
-      row._get = function () { return { zh: z.value.trim(), en: e.value.trim(), done: done.checked }; };
-      msRows.appendChild(row); return z;
-    }
-    (g.milestones || []).forEach(addMs);
-
-    var coRows = el('div', { class: 'rows' });
-    function addCo(c) {
-      var z = el('input', { type: 'text', value: c.zh || '', 'aria-label': '收集項目中文' }), e = el('input', { type: 'text', value: c.en || '', 'aria-label': '收集項目英文' });
-      var got = el('input', { type: 'number', min: '0', inputmode: 'numeric', value: String(c.got || 0) });
-      var max = el('input', { type: 'number', min: '1', inputmode: 'numeric', value: String(c.max || '') });
-      var row = el('div', { class: 'row co' }, [z, e,
-        el('label', { class: 'f' }, [el('span', { class: 'sr nl', text: '已收集' }), got]),
-        el('label', { class: 'f' }, [el('span', { class: 'sr nl', text: '總數' }), max]),
-        el('button', { type: 'button', class: 'x', 'aria-label': '移除這個收集項目', text: '×', onclick: function () { row.remove(); setDirty(true); } })]);
-      row._get = function () { return { zh: z.value.trim(), en: e.value.trim(), got: parseInt(got.value, 10) || 0, max: parseInt(max.value, 10) || 0, _n: [got, max] }; };
-      coRows.appendChild(row); return z;
-    }
-    (g.collect || []).forEach(addCo);
-
-    var towerSel = {};
-    var towers = null;
-    if (g.map === 'botw') {
-      towers = el('div', { class: 'towers' }, REGIONS.map(function (r) {
-        var s = el('select', {}, TOWER_ST.map(function (t, k) { return el('option', { value: String(k), text: t }); }));
-        s.value = String((g.towers && g.towers[r[0]]) || 0); towerSel[r[0]] = s;
-        return field(r[1], s);
-      }));
-    }
-
-    var form = el('form', { class: 'panel stack', oninput: function () { setDirty(true); }, onchange: function () { setDirty(true); }, onsubmit: function (ev) {
+    function submit(ev) {
       ev.preventDefault(); if (state.busy) return;
       err.textContent = '';
       form.querySelectorAll('[aria-invalid]').forEach(function (n) { n.removeAttribute('aria-invalid'); });
       var bad = function (n, m) { err.textContent = m; n.setAttribute('aria-invalid', 'true'); n.focus(); };
       var id = gid.value.trim().toLowerCase();
       if (!nz.value.trim()) return bad(nz, '請填中文名稱。');
-      if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(id)) return bad(gid, '代號只能用小寫英文、數字和連字號，例如 totk。');
+      if (!GAME_ID_PATTERN.test(id)) return bad(gid, '代號只能用小寫英文、數字和連字號，例如 totk。');
       if (isNew && state.games.some(function (x) { return x.id === id; })) return bad(gid, '已經有遊戲用了代號「' + id + '」。');
-      var ms = Array.prototype.map.call(msRows.children, function (r) { return r._get(); }).filter(function (m) { return m.zh || m.en; });
-      var co = [];
-      for (var k = 0; k < coRows.children.length; k++) {
-        var c = coRows.children[k]._get();
-        if (!c.zh && !c.en) continue;
-        if (c.max < 1) return bad(c._n[1], '「' + (c.zh || c.en) + '」的總數要大於 0。');
-        if (c.got > c.max) return bad(c._n[0], '「' + (c.zh || c.en) + '」已收集 ' + c.got + '，超過總數 ' + c.max + '。');
-        delete c._n; co.push(c);
-      }
-      var out = { id: id, name: { zh: nz.value.trim(), en: ne.value.trim() }, platform: plat.value.trim(), milestones: ms, collect: co,
-        note: { zh: noteZ.value.trim(), en: noteE.value.trim() } };
-      if (g.map) {
-        out.map = g.map; out.towers = {};
-        Object.keys(towerSel).forEach(function (key) { var v = +towerSel[key].value; if (v) out.towers[key] = v; });
-      }
-      var next = state.games.slice();
-      if (isNew) next.push(out); else next[i] = out;
+      var collected = collection.read();
+      if (collected.error) return bad(collected.input, collected.error);
+      var out = { id: id, name: { zh: nz.value.trim(), en: ne.value.trim() }, platform: plat.value.trim(),
+        milestones: milestones.read(), collect: collected.items, note: { zh: noteZ.value.trim(), en: noteE.value.trim() } };
+      if (g.map) { out.map = g.map; out.towers = towers ? towers.read() : {}; }
+      var next = isNew ? state.games.concat([out]) : state.games.map(function (x, k) { return k === i ? out : x; });
       saveGames(next, save, (isNew ? 'add game ' : 'update game ') + id);
-    } }, [
+    }
+
+    form = el('form', { class: 'panel stack', oninput: function () { setDirty(true); }, onchange: function () { setDirty(true); }, onsubmit: submit }, [
       el('div', { class: 'grid2' }, [field('中文名稱', nz), field('英文名稱', ne)]),
       el('div', { class: 'grid2' }, [field('平台', plat), field('代號', gid, isNew ? '網址用，例如 totk，建立後不能改' : '建立後不能修改')]), plats,
       el('fieldset', { class: 'stack' }, [el('legend', { text: '里程碑' }),
         el('p', { class: 'muted', style: 'margin:0', text: '勾選代表已完成。完成比例就是首頁顯示的百分比。' }),
-        msRows,
-        el('div', {}, [el('button', { type: 'button', class: 'btn btn-line', text: '新增里程碑', onclick: function () { addMs({}).focus(); setDirty(true); } })])]),
+        milestones.node,
+        el('div', {}, [el('button', { type: 'button', class: 'btn btn-line', text: '新增里程碑', onclick: function () { milestones.add({}).focus(); setDirty(true); } })])]),
       el('fieldset', { class: 'stack' }, [el('legend', { text: '收集' }),
         el('div', { class: 'row-head', style: 'grid-template-columns:minmax(0,1fr) minmax(0,1fr) 96px 96px 44px' }, ['中文', '英文', '已收集', '總數', '']),
-        coRows,
-        el('div', {}, [el('button', { type: 'button', class: 'btn btn-line', text: '新增收集項目', onclick: function () { addCo({}).focus(); setDirty(true); } })])]),
-      towers ? el('fieldset', { class: 'stack' }, [el('legend', { text: '海拉魯地圖塔區' }), towers]) : null,
+        collection.node,
+        el('div', {}, [el('button', { type: 'button', class: 'btn btn-line', text: '新增收集項目', onclick: function () { collection.add({}).focus(); setDirty(true); } })])]),
+      towers ? el('fieldset', { class: 'stack' }, [el('legend', { text: '海拉魯地圖塔區' }), towers.node]) : null,
       el('div', { class: 'grid2' }, [field('最近進度（中文）', noteZ, '顯示在首頁存檔上'), field('最近進度（英文）', noteE)]),
       err,
       el('div', { class: 'acts' }, [save, el('button', { type: 'button', class: 'btn btn-line', text: '取消', onclick: function () { if (leaveOk()) { setDirty(false); renderList(); } } })])

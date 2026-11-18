@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>文章 · ggrst.io</title>
 <meta name="theme-color" content="#1C2140">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -55,61 +56,8 @@
 <div id="out" aria-live="polite"><p class="msg">讀取文章中…</p></div>
 </article>
 </main>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
-<script>
-(function () {
-  'use strict';
-  var out = document.getElementById('out');
-  var slug = new URLSearchParams(location.search).get('p') || '';
-  var CAT = { game: '遊戲', code: '程式', know: '知識' };
-
-  function msg(text, withLink) {
-    out.innerHTML = '';
-    var p = document.createElement('p'); p.className = 'msg'; p.textContent = text + ' ';
-    if (withLink) { var a = document.createElement('a'); a.href = './#posts'; a.textContent = '看其他文章'; p.appendChild(a); }
-    out.appendChild(p);
-  }
-  if (!/^[a-z0-9][a-z0-9-]{0,80}$/.test(slug)) { msg('找不到這篇文章。', true); return; }
-
-  function get(url, json) {
-    return fetch(url, { cache: 'no-cache' }).then(function (r) {
-      if (r.status === 404) { var e = new Error('404'); e.notFound = true; throw e; }
-      if (!r.ok) throw new Error(r.status);
-      return json ? r.json() : r.text();
-    });
-  }
-
-  Promise.all([get('data/posts.json', true), get('posts/' + slug + '.md', false)]).then(function (res) {
-    var meta = (res[0] || []).filter(function (p) { return p.slug === slug; })[0];
-    if (!meta) { msg('找不到這篇文章。', true); return; }
-    var title = (meta.title && (meta.title.zh || meta.title.en)) || slug;
-    document.title = title + ' · ggrst.io';
-    var html = window.marked && window.DOMPurify
-      ? DOMPurify.sanitize(marked.parse(res[1]))
-      : null;
-
-    out.innerHTML = '';
-    var head = document.createElement('header'); head.className = 'post-head';
-    var m = document.createElement('div'); m.className = 'post-meta';
-    var cat = document.createElement('span'); cat.className = 'cat';
-    var dot = document.createElement('i');
-    var c = CAT[meta.cat] ? meta.cat : 'know';
-    if (c === 'know') dot.className = 'know'; else dot.style.background = c === 'game' ? 'var(--amber)' : 'var(--cobalt)';
-    cat.appendChild(dot); cat.appendChild(document.createTextNode(CAT[c]));
-    var time = document.createElement('time'); time.className = 'num'; time.dateTime = meta.date || ''; time.textContent = meta.date || '';
-    m.appendChild(cat); m.appendChild(time);
-    var h1 = document.createElement('h1'); h1.textContent = title;
-    head.appendChild(m); head.appendChild(h1);
-    var body = document.createElement('div'); body.className = 'prose';
-    if (html != null) body.innerHTML = html;
-    else { var pre = document.createElement('p'); pre.style.whiteSpace = 'pre-wrap'; pre.textContent = res[1]; body.appendChild(pre); }
-    out.appendChild(head); out.appendChild(body);
-  }).catch(function (e) {
-    if (e && e.notFound) msg('找不到這篇文章。', true);
-    else msg('讀取文章失敗，請檢查網路後重新整理。', false);
-  });
-})();
-</script>
+<script src="assets/vendor/marked.min.js"></script>
+<script src="assets/vendor/purify.min.js"></script>
+<script src="assets/post.js"></script>
 </body>
 </html>
