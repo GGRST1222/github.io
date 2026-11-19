@@ -44,14 +44,6 @@
     });
   }
 
-  // The game card is extra context: a missing games.json must not hide the post.
-  function fetchGamesOrEmpty() {
-    return fetchResource('/data/games.json', true).catch(function (error) {
-      console.warn('Games list unavailable, skipping the game card:', error);
-      return [];
-    });
-  }
-
   // Markdown links and images are written relative to the site root (images/2026/11/x.png),
   // which /posts/<slug>/ would otherwise resolve one folder too deep.
   function resolveFromRoot(url) {
@@ -200,9 +192,10 @@
     return;
   }
 
-  Promise.all([fetchResource('/data/posts.json', true), fetchGamesOrEmpty(), fetchResource('/posts/' + slug + '.md', false)])
+  // The game card is owner-only: loadPrivateGames() resolves to null for everyone else, never rejects.
+  Promise.all([fetchResource('/data/posts.json', true), window.ggrstSite.loadPrivateGames(), fetchResource('/posts/' + slug + '.md', false)])
     .then(function (results) {
-      renderPost(window.ggrstSite.publishedPosts(results[0]), Array.isArray(results[1]) ? results[1] : [], results[2]);
+      renderPost(window.ggrstSite.publishedPosts(results[0]), results[1] || [], results[2]);
     })
     .catch(function (error) {
       if (error && error.notFound) {
