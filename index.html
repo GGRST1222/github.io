@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>ggrst.io</title>
 <meta name="description" content="ggrst.io：遊戲、程式、知識的部落格與遊戲存檔紀錄">
 <link rel="canonical" href="https://ggrst.io/">
@@ -46,6 +46,8 @@ h2{font-size:clamp(32px,4vw,48px);font-stretch:112%}
 .slot .nm{font-weight:700;font-size:16px;line-height:1.3;min-width:0}
 .slot .pc{grid-row:1/3;grid-column:3;font-weight:900;font-size:26px;font-stretch:90%;font-variant-numeric:tabular-nums}
 .slot .pc.done{color:var(--amber)}
+a.slot{text-decoration:none}
+.slot .go{grid-row:1/3;grid-column:3;color:var(--amber);font-size:22px;display:flex}
 .slot .meta{font-size:13px;color:var(--on-screen-mute);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .slot .sbar{grid-column:1/4;height:6px;border-radius:99px;background:var(--screen);overflow:hidden;margin-top:10px}
 .slot .sbar i,.gbar i{display:block;height:100%;background:var(--amber);border-radius:99px;transform-origin:left;transform:scaleX(0);transition:transform .9s cubic-bezier(.2,.8,.2,1)}
@@ -174,7 +176,7 @@ footer{margin-top:96px;padding-top:20px;border-top:1px solid #343A66;display:fle
 <a href="#top" class="logo" aria-label="ggrst.io">ggrst<span>.io</span></a>
 <nav class="site-nav" aria-label="主選單" data-i-aria="navAria">
 <a href="#posts" data-i="navPosts">文章</a>
-<a href="#games" data-i="navGames">遊戲</a>
+<a href="#games" data-i="navGames" id="navGamesLink" hidden>遊戲</a>
 <button class="lang-btn" id="langBtn" type="button" lang="en" aria-label="Switch to English">EN</button>
 </nav>
 </div>
@@ -190,13 +192,13 @@ footer{margin-top:96px;padding-top:20px;border-top:1px solid #343A66;display:fle
 <p data-i="heroSub">記錄我在遊戲、程式和各種知識裡的探索與筆記。</p>
 <div class="hero-links">
 <a href="#posts" class="btn btn-solid" id="cta1" data-i="cta1">讀最新文章</a>
-<a href="#games" class="btn btn-line" id="cta2" data-i="cta2">看遊戲存檔</a>
+<a href="#games" class="btn btn-line" id="cta2" data-i="cta2" hidden>看遊戲存檔</a>
 </div>
 </div>
 <div class="screen">
-<div class="screen-head"><span data-i="slotsTitle">選擇存檔</span><small data-i="slotsHint">點一下看詳細進度</small></div>
+<div class="screen-head"><span id="slotsTitle">最新日誌</span><small id="slotsHint">點一下開始閱讀</small></div>
 <div class="slots" id="slots" aria-busy="true">
-<noscript><p class="screen-msg">存檔畫面需要 JavaScript 才能顯示。</p></noscript>
+<noscript><p class="screen-msg">最新日誌需要 JavaScript 才能顯示，可以直接看下面的任務日誌。</p></noscript>
 </div>
 </div>
 </div>
@@ -215,7 +217,7 @@ footer{margin-top:96px;padding-top:20px;border-top:1px solid #343A66;display:fle
 </div>
 </section>
 
-<section id="games">
+<section id="games" hidden>
 <div class="wrap">
 <h2 data-i="gamesTitle">遊戲存檔</h2>
 <p class="lede" data-i="gamesSub">正在玩的遊戲和目前的進度。點開存檔看里程碑和收集數量。</p>
@@ -229,7 +231,7 @@ footer{margin-top:96px;padding-top:20px;border-top:1px solid #343A66;display:fle
 <p class="lede" data-i="contSub">程式和這個網站的原始碼都放在 GitHub 上。</p>
 <ul class="menu">
 <li><a href="https://github.com/GGRST1222" rel="me noopener" target="_blank"><span data-i="contGh">在 GitHub 看我的程式</span><small>github.com/GGRST1222<span class="sr" data-i="newTab">（在新分頁開啟）</span></small></a></li>
-<li><a href="#top"><span data-i="contTop">回到選擇存檔</span></a></li>
+<li><a href="#top"><span data-i="contTop">回到最上面</span></a></li>
 </ul>
 <footer><span>© 2026 ggrst.io</span><span data-i="footer">用鍵盤和手把打造</span></footer>
 </div>

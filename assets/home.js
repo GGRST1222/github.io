@@ -5,9 +5,10 @@
     zh: {
       langBtn: 'EN', langAria: 'Switch to English', langOther: 'en',
       cta1Games: '看遊戲存檔',
+      slotsTitle: '選擇存檔', slotsHint: '點一下看詳細進度',
       slotMs: '里程碑', slotNoNote: '還沒有進度筆記',
       game: '遊戲', code: '程式', know: '知識', all: '全部', filterAria: '依主題篩選文章',
-      noPosts: '第一篇文章還在寫。', noPostsLink: '先去看看遊戲存檔', noPostsCat: '這個主題還沒有文章。', showAll: '看全部文章',
+      noPosts: '第一篇文章還在寫。', noPostsLink: '先去看看遊戲存檔', latestTitle: '最新日誌', latestHint: '點一下開始閱讀', noPostsCat: '這個主題還沒有文章。', showAll: '看全部文章',
       read: '閱讀',
       milestones: '里程碑', collect: '收集', lastNote: '最近進度', relatedPosts: '相關日誌', msDone: '已完成', msTodo: '未完成', newTab: '（在新分頁開啟）',
       notStarted: '未開始', playing: '進行中', cleared: '已破關',
@@ -26,7 +27,7 @@
       slotMs: 'Milestones', slotNoNote: 'No progress notes yet',
       postsTitle: 'Quest log', postsSub: 'Latest posts: game notes, code notes and things worth knowing.',
       game: 'Games', code: 'Code', know: 'Knowledge', all: 'All', filterAria: 'Filter posts by topic',
-      noPosts: 'The first post is still being written.', noPostsLink: 'See my save files meanwhile', noPostsCat: 'No posts on this topic yet.', showAll: 'Show all posts',
+      noPosts: 'The first post is still being written.', noPostsLink: 'See my save files meanwhile', latestTitle: 'Latest posts', latestHint: 'Pick one to read', noPostsCat: 'No posts on this topic yet.', showAll: 'Show all posts',
       read: 'Read',
       gamesTitle: 'Save files', gamesSub: 'What I am playing and how far I have got. Open a save for milestones and collections.',
       milestones: 'Milestones', collect: 'Collection', lastNote: 'Latest', relatedPosts: 'Related posts', msDone: 'done', msTodo: 'not done',
@@ -35,7 +36,7 @@
       st0: 'Tower locked', st1: 'Tower active', st2: 'Explored', mapNote: 'Schematic, positions and scale are approximate',
       beast: 'Divine Beast', castle: 'Hyrule Castle', start: 'Start',
       contTitle: 'Continue?', contSub: 'My code, and the source of this site, live on GitHub.',
-      contGh: 'See my code on GitHub', contTop: 'Back to save select', newTab: ' (opens in a new tab)',
+      contGh: 'See my code on GitHub', contTop: 'Back to top', newTab: ' (opens in a new tab)',
       footer: 'Built with a keyboard and a controller',
       loadFail: 'Could not load the data. Check your connection and try again.', retry: 'Try again', loading: 'Loading save files…'
     }
@@ -58,8 +59,10 @@
   var CHEV = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   var CHECK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFB020" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-  var state = { lang: 'zh', filter: 'all', games: null, posts: null, error: false };
+  // isOwner is true only where the /admin/ token can read the private saves.
+  var state = { lang: 'zh', filter: 'all', games: null, posts: null, isOwner: false, error: false };
   var LANG_STORAGE_KEY = 'ggrst-lang';
+  var LATEST_IN_HERO = 3;
   var LEGACY_STATE_KEY = 'ggrst-state-v1';
   try {
     var savedLang = localStorage.getItem(LANG_STORAGE_KEY);
@@ -100,12 +103,30 @@
   }
 
   var barsPainted = false;
+  // Visitors see the newest posts in the hero screen; the owner sees the save files.
+  function renderLatest(t, zh, root) {
+    var latest = state.posts.slice(0, LATEST_IN_HERO);
+    if (!latest.length) { root.appendChild(el('p', { class: 'screen-msg', text: t.noPosts })); return; }
+    latest.forEach(function (p, idx) {
+      var cat = STRINGS[state.lang][p.cat] ? p.cat : 'know';
+      root.appendChild(el('a', { class: 'slot', href: window.ggrstSite.postUrl(p.slug) }, [
+        el('span', { class: 'no', 'aria-hidden': 'true', text: String(idx + 1) }),
+        el('span', { class: 'nm', text: pick(p.title, zh) }),
+        el('span', { class: 'go', 'aria-hidden': 'true', html: ARROW }),
+        el('span', { class: 'meta', text: t[cat] + '　' + fmtDate(p.date, zh) })
+      ]));
+    });
+  }
+
   function renderSlots(t, zh) {
     var root = document.getElementById('slots');
     root.innerHTML = '';
+    document.getElementById('slotsTitle').textContent = state.isOwner ? t.slotsTitle : t.latestTitle;
+    document.getElementById('slotsHint').textContent = state.isOwner ? t.slotsHint : t.latestHint;
     if (state.error) { root.appendChild(failMsg(t, 'screen-msg')); return; }
-    if (!state.games) { root.appendChild(el('p', { class: 'screen-msg', text: t.loading })); return; }
+    if (!state.posts) { root.appendChild(el('p', { class: 'screen-msg', text: t.loading })); return; }
     root.removeAttribute('aria-busy');
+    if (!state.isOwner) { renderLatest(t, zh, root); return; }
     var bars = [];
     state.games.forEach(function (g, idx) {
       var s = gameStats(g), name = pick(g.name, zh);
@@ -241,12 +262,13 @@
     var posts = state.posts;
     var hasPosts = posts.length > 0;
     // No posts yet: the hero sends people to the saves instead of an empty log.
-    cta1.href = hasPosts ? '#posts' : '#games';
-    cta1.textContent = hasPosts ? t.cta1 : t.cta1Games;
-    cta2.hidden = !hasPosts;
+    var sendToGames = !hasPosts && state.isOwner;
+    cta1.href = sendToGames ? '#games' : '#posts';
+    cta1.textContent = sendToGames ? t.cta1Games : t.cta1;
+    cta2.hidden = !(hasPosts && state.isOwner);
     f.hidden = !hasPosts;
     if (!hasPosts) {
-      list.appendChild(el('li', {}, [el('p', { class: 'state' }, [t.noPosts + ' ', el('a', { href: '#games', text: t.noPostsLink })])]));
+      list.appendChild(el('li', {}, [el('p', { class: 'state' }, [t.noPosts + ' ', state.isOwner ? el('a', { href: '#games', text: t.noPostsLink }) : null])]));
       return;
     }
     f.setAttribute('aria-label', t.filterAria);
@@ -282,6 +304,8 @@
     document.querySelectorAll('[data-i-aria]').forEach(function (n) { n.setAttribute('aria-label', t[n.getAttribute('data-i-aria')]); });
     var lb = document.getElementById('langBtn');
     lb.textContent = t.langBtn; lb.setAttribute('aria-label', t.langAria); lb.setAttribute('lang', t.langOther);
+    document.getElementById('games').hidden = !state.isOwner;
+    document.getElementById('navGamesLink').hidden = !state.isOwner;
     renderSlots(t, zh); renderSaves(t, zh); renderPosts(t, zh);
   }
 
@@ -289,12 +313,13 @@
     return fetch(url, { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
   }
   function load() {
-    state.error = false; state.games = null; render();
-    Promise.all([getJSON('data/games.json'), getJSON('data/posts.json')]).then(function (res) {
-      state.games = Array.isArray(res[0]) ? res[0] : [];
+    state.error = false; state.games = null; state.posts = null; render();
+    Promise.all([window.ggrstSite.loadPrivateGames(), getJSON('data/posts.json')]).then(function (res) {
+      state.isOwner = res[0] !== null;
+      state.games = res[0] || [];
       state.posts = window.ggrstSite.publishedPosts(res[1]);
       render();
-      if (/^#g-/.test(location.hash)) openSave(location.hash.slice(3));
+      if (state.isOwner && /^#g-/.test(location.hash)) openSave(location.hash.slice(3));
     }).catch(function (error) {
       console.error('Site data failed to load:', error);
       state.error = true;
