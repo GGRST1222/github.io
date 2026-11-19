@@ -1,1 +1,74 @@
-[]
+[
+  {
+    "id": "acnh",
+    "name": {
+      "zh": "集合啦！動物森友會",
+      "en": "Animal Crossing: New Horizons"
+    },
+    "platform": "Switch",
+    "milestones": [
+      {
+        "zh": "博物館開館",
+        "en": "Open the museum",
+        "done": true
+      },
+      {
+        "zh": "蓋好商店",
+        "en": "Build the shop",
+        "done": false
+      },
+      {
+        "zh": "蓋好裁縫店",
+        "en": "Build the tailor shop",
+        "done": false
+      },
+      {
+        "zh": "舉辦 K.K. 演唱會",
+        "en": "Host the K.K. concert",
+        "done": false
+      },
+      {
+        "zh": "島嶼評價五星",
+        "en": "Reach a 5-star island rating",
+        "done": false
+      }
+    ],
+    "collect": [
+      {
+        "zh": "魚類",
+        "en": "Fish",
+        "got": 0,
+        "max": 80
+      },
+      {
+        "zh": "昆蟲",
+        "en": "Bugs",
+        "got": 0,
+        "max": 80
+      },
+      {
+        "zh": "海洋生物",
+        "en": "Sea creatures",
+        "got": 0,
+        "max": 40
+      },
+      {
+        "zh": "化石",
+        "en": "Fossils",
+        "got": 0,
+        "max": 73
+      },
+      {
+        "zh": "藝術品",
+        "en": "Art",
+        "got": 0,
+        "max": 43
+      }
+    ],
+    "note": {
+      "zh": "",
+      "en": ""
+    },
+    "public": true
+  }
+]
