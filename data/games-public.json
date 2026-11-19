@@ -70,5 +70,69 @@
       "en": ""
     },
     "public": true
+  },
+  {
+    "id": "oot",
+    "name": {
+      "zh": "薩爾達傳說 時之笛",
+      "en": "The Legend of Zelda: Ocarina of Time"
+    },
+    "platform": "Switch",
+    "milestones": [
+      {
+        "zh": "取得三顆精靈石",
+        "en": "Collect the three Spiritual Stones",
+        "done": true
+      },
+      {
+        "zh": "通關 森林神殿",
+        "en": "Clear the Forest Temple",
+        "done": false
+      },
+      {
+        "zh": "通關 火之神殿",
+        "en": "Clear the Fire Temple",
+        "done": false
+      },
+      {
+        "zh": "通關 水之神殿",
+        "en": "Clear the Water Temple",
+        "done": false
+      },
+      {
+        "zh": "通關 暗影神殿",
+        "en": "Clear the Shadow Temple",
+        "done": false
+      },
+      {
+        "zh": "通關 魂之神殿",
+        "en": "Clear the Spirit Temple",
+        "done": false
+      },
+      {
+        "zh": "擊敗加儂",
+        "en": "Defeat Ganon",
+        "done": false
+      }
+    ],
+    "collect": [
+      {
+        "zh": "黃金蜘蛛",
+        "en": "Gold Skulltulas",
+        "got": 0,
+        "max": 100
+      },
+      {
+        "zh": "心之碎片",
+        "en": "Pieces of Heart",
+        "got": 0,
+        "max": 36
+      }
+    ],
+    "note": {
+      "zh": "",
+      "en": ""
+    },
+    "public": true
   }
 ]
