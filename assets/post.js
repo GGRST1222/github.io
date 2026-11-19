@@ -3,7 +3,6 @@
   'use strict';
 
   var SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,80}$/;
-  var MAX_HEADING_DEPTH = 6;
   var CATEGORY_LABELS = { game: '遊戲', code: '程式', know: '知識' };
   var CATEGORY_COLORS = { game: 'var(--amber)', code: 'var(--cobalt)' };
   var MSG_NOT_FOUND = '找不到這篇文章。';
@@ -37,17 +36,6 @@
     });
   }
 
-  // The page title is the only h1, so Markdown "#" headings start at h2.
-  function renderMarkdown(markdown) {
-    if (!window.marked || !window.DOMPurify) return null;
-    window.marked.use({
-      walkTokens: function (token) {
-        if (token.type === 'heading') token.depth = Math.min(MAX_HEADING_DEPTH, token.depth + 1);
-      }
-    });
-    return window.DOMPurify.sanitize(window.marked.parse(markdown));
-  }
-
   function buildHeader(meta, title) {
     var category = CATEGORY_LABELS[meta.cat] ? meta.cat : 'know';
     var dot = document.createElement('i');
@@ -79,10 +67,8 @@
   function buildBody(markdown) {
     var body = document.createElement('div');
     body.className = 'prose';
-    var sanitizedHtml = renderMarkdown(markdown);
-    if (sanitizedHtml != null) {
-      body.innerHTML = sanitizedHtml; // DOMPurify output, inserted once straight from sanitize()
-    } else {
+    var isRendered = Boolean(window.ggrstMarkdown && window.ggrstMarkdown.renderInto(body, markdown));
+    if (!isRendered) {
       var fallback = document.createElement('p');
       fallback.style.whiteSpace = 'pre-wrap';
       fallback.textContent = markdown;
