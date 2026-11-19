@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "slug": "first-content",
+    "cat": "game",
+    "date": "2026-11-19",
+    "title": {
+      "zh": "TEST",
+      "en": ""
+    },
+    "excerpt": {
+      "zh": "",
+      "en": ""
+    },
+    "draft": true
+  }
+]
