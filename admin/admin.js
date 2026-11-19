@@ -1,8 +1,12 @@
-/* ggrst.io admin: edits data/*.json and posts/*.md through the GitHub Contents API. */
+/* ggrst.io admin: edits posts (public site repo) and game saves (private repo) through the GitHub Contents API. */
 (function () {
   'use strict';
-  var OWNER = 'GGRST1222', REPO = 'github.io', BRANCH = 'master';
-  var API = 'https://api.github.com/repos/' + OWNER + '/' + REPO;
+  var OWNER = 'GGRST1222';
+  var API_ROOT = 'https://api.github.com/repos/' + OWNER + '/';
+  var SITE_REPO = Object.freeze({ name: 'github.io', branch: 'master', label: '網站' });
+  // Game saves are owner-only, so they live outside the public site repo.
+  var SAVES_REPO = Object.freeze({ name: 'ggrst-saves', branch: 'master', label: '遊戲存檔' });
+  var SAVES_FILE = 'games.json';
   var TOKEN_KEY = 'ggrst-admin-token';
   var CATS = [['game', '遊戲'], ['code', '程式'], ['know', '知識']];
   var REGIONS = [['hebra', '赫布拉'], ['woodland', '森林'], ['eldin', '艾爾汀'], ['akkala', '阿卡萊'], ['tabantha', '塔邦塔'],
@@ -95,8 +99,8 @@
   }
 
   /* ---------- GitHub API ---------- */
-  function gh(method, path, body) {
-    return fetch(API + path, {
+  function gh(method, path, body, repo) {
+    return fetch(API_ROOT + (repo || SITE_REPO).name + path, {
       method: method,
       headers: { 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json' },
@@ -112,21 +116,24 @@
     if (!e || !e.status) return '連不上 GitHub，請檢查網路後再試一次。';
     if (e.status === 401) return '登入已失效（token 無效或過期），請重新登入。';
     if (e.status === 403) return 'Token 沒有寫入權限，或 GitHub 暫時限制了請求次數。請確認 Contents 權限是 Read and write。';
-    if (e.status === 404) return '找不到檔案或 repo。請確認 token 有 ' + OWNER + '/' + REPO + ' 的權限。';
+    if (e.status === 404) return '找不到檔案或 repo。請確認 token 有 ' + OWNER + '/' + SITE_REPO.name + ' 和 ' + OWNER + '/' + SAVES_REPO.name + ' 的權限。';
     if (e.status === 409 || e.status === 422) return '檔案在別處被改過了。已重新載入最新資料，請再改一次。';
     return 'GitHub 回應錯誤（' + e.status + '），請稍後再試。';
   }
-  function getFile(path) {
-    return gh('GET', '/contents/' + path + '?ref=' + BRANCH).then(function (f) { return { text: b64decode(f.content), sha: f.sha }; });
+  // repo defaults to the public site repo; pass SAVES_REPO for the private game saves.
+  function getFile(path, repo) {
+    var target = repo || SITE_REPO;
+    return gh('GET', '/contents/' + path + '?ref=' + target.branch, null, target).then(function (f) { return { text: b64decode(f.content), sha: f.sha }; });
   }
-  function putContent(path, base64, sha, msg) {
-    return gh('PUT', '/contents/' + path, { message: msg, content: base64, sha: sha || undefined, branch: BRANCH })
+  function putContent(path, base64, sha, msg, repo) {
+    var target = repo || SITE_REPO;
+    return gh('PUT', '/contents/' + path, { message: msg, content: base64, sha: sha || undefined, branch: target.branch }, target)
       .then(function (r) { return r.content.sha; });
   }
-  function putFile(path, text, sha, msg) { return putContent(path, b64encode(text), sha, msg); }
-  function delFile(path, sha, msg) { return gh('DELETE', '/contents/' + path, { message: msg, sha: sha, branch: BRANCH }); }
+  function putFile(path, text, sha, msg, repo) { return putContent(path, b64encode(text), sha, msg, repo); }
+  function delFile(path, sha, msg) { return gh('DELETE', '/contents/' + path, { message: msg, sha: sha, branch: SITE_REPO.branch }); }
   function loadData() {
-    return Promise.all([getFile('data/posts.json'), getFile('data/games.json')]).then(function (r) {
+    return Promise.all([getFile('data/posts.json'), getFile(SAVES_FILE, SAVES_REPO)]).then(function (r) {
       state.posts = JSON.parse(r[0].text); state.postsSha = r[0].sha;
       state.games = JSON.parse(r[1].text); state.gamesSha = r[1].sha;
     });
@@ -166,6 +173,21 @@
   }
   document.getElementById('logout').addEventListener('click', logout);
 
+  // The token must be able to write both repos; name the one it is missing so the fix is obvious.
+  function checkPush(repo) {
+    return gh('GET', '', null, repo).then(function (info) {
+      if (info.permissions && info.permissions.push) return;
+      var error = new Error('No push access to ' + repo.name);
+      error.userMessage = 'Token 沒有 ' + OWNER + '/' + repo.name + '（' + repo.label + '）的寫入權限。請在 token 的 Repository access 加上這個 repo，Contents 設為 Read and write。';
+      throw error;
+    }, function (error) {
+      if (error && error.status === 404) {
+        error.userMessage = 'Token 看不到 ' + OWNER + '/' + repo.name + '（' + repo.label + '）。請在 token 的 Repository access 加上這個 repo。';
+      }
+      throw error;
+    });
+  }
+
   function renderLogin(errMsg) {
     app.innerHTML = '';
     var tok = el('input', { type: 'password', id: 'tok', autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'tokErr' });
@@ -177,8 +199,7 @@
       var v = tok.value.trim();
       if (!v) { err.textContent = '請貼上 token。'; tok.setAttribute('aria-invalid', 'true'); tok.focus(); return; }
       state.token = v; busy(btn, true, '確認中…');
-      gh('GET', '').then(function (repo) {
-        if (!repo.permissions || !repo.permissions.push) { var e2 = new Error('ro'); e2.status = 403; throw e2; }
+      Promise.all([checkPush(SITE_REPO), checkPush(SAVES_REPO)]).then(function () {
         state.busy = false; storeToken(v, rem.checked); return start();
       }).catch(function (e) {
         busy(btn, false); state.token = null;
@@ -191,13 +212,13 @@
     ]);
     app.appendChild(el('div', { class: 'login panel stack' }, [
       el('h1', { text: '後台登入' }),
-      el('p', { class: 'muted', style: 'margin:0', text: '用 GitHub token 登入。儲存時會直接 commit 到 ' + OWNER + '/' + REPO + '，網站約 1 分鐘後更新。' }),
+      el('p', { class: 'muted', style: 'margin:0', text: '用 GitHub token 登入。文章會 commit 到 ' + OWNER + '/' + SITE_REPO.name + '（網站約 1 分鐘後更新），遊戲存檔存在私人的 ' + OWNER + '/' + SAVES_REPO.name + '，只有登入過的瀏覽器看得到。' }),
       form,
       el('details', {}, [
         el('summary', { style: 'cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center', text: '怎麼取得 token？' }),
         el('ol', {}, [
           el('li', {}, ['打開 ', el('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener', text: 'GitHub 新增 fine-grained token' })]),
-          el('li', { text: 'Repository access 選「Only select repositories」，只勾 ' + OWNER + '/' + REPO }),
+          el('li', { text: 'Repository access 選「Only select repositories」，勾 ' + OWNER + '/' + SITE_REPO.name + ' 和 ' + OWNER + '/' + SAVES_REPO.name }),
           el('li', { text: 'Permissions → Repository permissions → Contents 設為「Read and write」' }),
           el('li', { text: '產生後複製 token，貼到上面' })
         ]),
@@ -691,7 +712,7 @@
   /* ---------- games ---------- */
   function saveGames(next, btn, msg) {
     busy(btn, true);
-    return putFile('data/games.json', JSON.stringify(next, null, 2) + '\n', state.gamesSha, commitMsg(msg))
+    return putFile(SAVES_FILE, JSON.stringify(next, null, 2) + '\n', state.gamesSha, commitMsg(msg), SAVES_REPO)
       .then(function (sha) { state.games = next; state.gamesSha = sha; setDirty(false); busy(btn, false); saved(); renderList(); })
       .catch(function (e) { busy(btn, false); onFail(e); });
   }
