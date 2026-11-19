@@ -1,11 +1,12 @@
 /* Rules shared by index.html and post.html: which posts are public, where a post lives, how far a game is,
-   and who may see the game saves (only the owner). */
+   and which game saves this viewer may see (the owner: all; visitors: the ones marked public). */
 (function () {
   'use strict';
 
   var POSTS_BASE = '/posts/';
   var OWNER_TOKEN_KEY = 'ggrst-admin-token'; // written by the /admin/ login
   var SAVES_URL = 'https://api.github.com/repos/GGRST1222/ggrst-saves/contents/games.json';
+  var PUBLIC_GAMES_URL = '/data/games-public.json'; // written by the admin: only the saves marked public
 
   function readOwnerToken() {
     try { return sessionStorage.getItem(OWNER_TOKEN_KEY) || localStorage.getItem(OWNER_TOKEN_KEY); }
@@ -40,6 +41,28 @@
       .sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
   }
 
+  // GitHub Pages answers a missing file with an error page (seen as 503, not 404), and the saves are only
+  // extra content: any failure means "no public saves", never a broken page.
+  function loadPublicGames() {
+    return fetch(PUBLIC_GAMES_URL, { cache: 'no-cache' }).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status + ' reading ' + PUBLIC_GAMES_URL);
+      return response.json();
+    }).then(function (games) {
+      return Array.isArray(games) ? games : [];
+    }).catch(function (error) {
+      console.warn('Public saves unavailable, showing posts only:', error);
+      return [];
+    });
+  }
+
+  // The owner gets every save from the private repo; visitors get only the saves marked public. Never rejects.
+  function loadGames() {
+    return loadPrivateGames().then(function (privateGames) {
+      if (privateGames) return { games: privateGames, isOwner: true };
+      return loadPublicGames().then(function (games) { return { games: games, isOwner: false }; });
+    });
+  }
+
   function gameStats(game) {
     var milestones = game.milestones || [];
     var doneCount = milestones.filter(function (m) { return m.done; }).length;
@@ -50,5 +73,5 @@
     return { n: doneCount, total: milestones.length, pct: pct, state: pct === 100 ? 'cleared' : isStarted ? 'playing' : 'notStarted' };
   }
 
-  window.ggrstSite = Object.freeze({ postUrl: postUrl, publishedPosts: publishedPosts, gameStats: gameStats, loadPrivateGames: loadPrivateGames });
+  window.ggrstSite = Object.freeze({ postUrl: postUrl, publishedPosts: publishedPosts, gameStats: gameStats, loadGames: loadGames });
 })();
