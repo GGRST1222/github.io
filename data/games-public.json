@@ -1,5 +1,61 @@
 [
   {
+    "id": "botw",
+    "name": {
+      "zh": "薩爾達傳說 曠野之息",
+      "en": "The Legend of Zelda: Breath of the Wild"
+    },
+    "platform": "Switch",
+    "milestones": [
+      {
+        "zh": "解放水之神獸（卓拉領地）",
+        "en": "Free the water Divine Beast (Zora’s Domain)",
+        "done": true
+      },
+      {
+        "zh": "解放風之神獸（利特村）",
+        "en": "Free the wind Divine Beast (Rito Village)",
+        "done": false
+      },
+      {
+        "zh": "解放火之神獸（死亡之山）",
+        "en": "Free the fire Divine Beast (Death Mountain)",
+        "done": false
+      },
+      {
+        "zh": "解放雷之神獸（格魯德沙漠）",
+        "en": "Free the lightning Divine Beast (Gerudo Desert)",
+        "done": false
+      },
+      {
+        "zh": "擊敗災厄加儂",
+        "en": "Defeat Calamity Ganon",
+        "done": false
+      }
+    ],
+    "collect": [
+      {
+        "zh": "神廟",
+        "en": "Shrines",
+        "got": 0,
+        "max": 120
+      },
+      {
+        "zh": "克洛格種子",
+        "en": "Korok seeds",
+        "got": 0,
+        "max": 900
+      }
+    ],
+    "note": {
+      "zh": "",
+      "en": ""
+    },
+    "map": "botw",
+    "towers": {},
+    "public": true
+  },
+  {
     "id": "acnh",
     "name": {
       "zh": "集合啦！動物森友會",
