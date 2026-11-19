@@ -3,7 +3,11 @@
   --paper:#F4F5F8; --card:#FFFFFF; --ink:#1C2140; --cobalt:#3450F0; --amber:#FFB020;
   --mute:#5F6484; --line:#D6D9E4; --screen:#1C2140; --screen-2:#262C55; --on-screen:#E8EAF6; --on-screen-mute:#A4A9CE;
   --danger:#C42B3B;
+  /* code colors, each 7:1 or better on --screen */
+  --code-keyword:#FFB020; --code-string:#9EE6B8; --code-number:#FF9EB1; --code-title:#A9B8FF;
+  --code-type:#7FD8F0; --code-attr:#FFD38A; --code-meta:#C9B8FF;
   --sans:'Archivo','Noto Sans TC',system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Consolas,'Noto Sans TC',monospace;
   --hdr:68px;
 }
 *{box-sizing:border-box}
