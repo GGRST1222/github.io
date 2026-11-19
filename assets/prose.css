@@ -1,0 +1,31 @@
+/* Rendered Markdown (post.html and the admin preview) + code colors on the navy code screen */
+.prose{font-size:18px;line-height:1.8;overflow-wrap:anywhere}
+.prose h2{margin:2em 0 .6em;font-size:28px}
+.prose h3{margin:1.6em 0 .5em;font-size:22px}
+.prose > :first-child{margin-top:0}
+.prose p,.prose ul,.prose ol,.prose blockquote,.prose pre,.prose table{margin:0 0 1.2em}
+.prose a{color:var(--cobalt);font-weight:600}
+.prose img{max-width:100%;height:auto;border-radius:12px}
+.prose blockquote{padding:4px 0 4px 18px;border-left:1px solid var(--ink);color:var(--mute)}
+.prose code{font-family:var(--mono);font-size:.88em;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.1em .4em}
+.prose pre{background:var(--screen);color:var(--on-screen);border-radius:14px;padding:18px 20px;overflow-x:auto;overflow-wrap:normal;line-height:1.6}
+.prose pre code{background:none;border:0;padding:0;color:inherit;font-size:15px}
+.prose pre[data-lang]::before{content:attr(data-lang);display:block;margin-bottom:10px;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--on-screen-mute)}
+.prose table{border-collapse:collapse;width:100%;display:block;overflow-x:auto}
+.prose th,.prose td{border-bottom:1px solid var(--line);padding:8px 12px;text-align:left}
+.prose hr{border:0;border-top:1px solid var(--line);margin:2.4em 0}
+
+/* highlight.js token classes */
+.hljs-keyword,.hljs-selector-tag,.hljs-doctag,.hljs-section{color:var(--code-keyword);font-weight:600}
+.hljs-string,.hljs-regexp,.hljs-char.escape_,.hljs-addition{color:var(--code-string)}
+.hljs-number,.hljs-literal,.hljs-symbol,.hljs-bullet{color:var(--code-number)}
+.hljs-title,.hljs-title.function_,.hljs-selector-id,.hljs-selector-class{color:var(--code-title)}
+.hljs-type,.hljs-built_in,.hljs-title.class_,.hljs-name{color:var(--code-type)}
+.hljs-attr,.hljs-attribute,.hljs-property,.hljs-variable,.hljs-template-variable,.hljs-params{color:var(--code-attr)}
+.hljs-meta,.hljs-meta .hljs-keyword{color:var(--code-meta)}
+.hljs-comment,.hljs-quote{color:var(--on-screen-mute);font-style:italic}
+.hljs-deletion{color:var(--code-number);text-decoration:line-through}
+.hljs-emphasis{font-style:italic}
+.hljs-strong{font-weight:700}
+
+@media (max-width:640px){.prose{font-size:17px}.prose pre{padding:16px}.prose pre code{font-size:14px}}

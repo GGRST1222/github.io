@@ -15,6 +15,15 @@
   var TOAST_ERROR_MS = 9000;
   var DELETE_CONFIRM_MS = 4000;
   var BASE64_CHUNK = 0x8000; // keeps String.fromCharCode.apply under engine argument limits
+  var IMAGE_EXTENSIONS = new Map([['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/gif', 'gif'], ['image/webp', 'webp']]);
+  var IMAGE_ACCEPT = Array.from(IMAGE_EXTENSIONS.keys()).join(',');
+  var IMAGE_DIR = 'images';
+  var MAX_IMAGE_MB = 5;
+  var MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024;
+  var IMAGE_NAME_RANDOM_BYTES = 3; // 6 hex characters, so two images saved in the same second don't collide
+  var MAX_ALT_LENGTH = 80;
+  var DEFAULT_IMAGE_ALT = '圖片說明';
+  var SITE_ROOT_URL = new URL('../', location.href).href; // post.html resolves image paths from the site root
 
   // A <meta> CSP cannot set frame-ancestors, so refuse to run inside a frame (clickjacking).
   if (window.top !== window.self) {
@@ -43,11 +52,12 @@
   function field(label, input, hint) {
     return el('label', { class: 'f' }, [label, hint ? el('span', { class: 'hint', text: hint }) : null, input]);
   }
-  function b64encode(str) {
-    var bytes = new TextEncoder().encode(str), bin = '';
+  function bytesToBase64(bytes) {
+    var bin = '';
     for (var i = 0; i < bytes.length; i += BASE64_CHUNK) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + BASE64_CHUNK));
     return btoa(bin);
   }
+  function b64encode(str) { return bytesToBase64(new TextEncoder().encode(str)); }
   function b64decode(b64) {
     var bin = atob(b64.replace(/\s/g, '')), bytes = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -86,6 +96,7 @@
     });
   }
   function explain(e) {
+    if (e && e.userMessage) return e.userMessage;
     if (!e || !e.status) return '連不上 GitHub，請檢查網路後再試一次。';
     if (e.status === 401) return '登入已失效（token 無效或過期），請重新登入。';
     if (e.status === 403) return 'Token 沒有寫入權限，或 GitHub 暫時限制了請求次數。請確認 Contents 權限是 Read and write。';
@@ -96,10 +107,11 @@
   function getFile(path) {
     return gh('GET', '/contents/' + path + '?ref=' + BRANCH).then(function (f) { return { text: b64decode(f.content), sha: f.sha }; });
   }
-  function putFile(path, text, sha, msg) {
-    return gh('PUT', '/contents/' + path, { message: msg, content: b64encode(text), sha: sha || undefined, branch: BRANCH })
+  function putContent(path, base64, sha, msg) {
+    return gh('PUT', '/contents/' + path, { message: msg, content: base64, sha: sha || undefined, branch: BRANCH })
       .then(function (r) { return r.content.sha; });
   }
+  function putFile(path, text, sha, msg) { return putContent(path, b64encode(text), sha, msg); }
   function delFile(path, sha, msg) { return gh('DELETE', '/contents/' + path, { message: msg, sha: sha, branch: BRANCH }); }
   function loadData() {
     return Promise.all([getFile('data/posts.json'), getFile('data/games.json')]).then(function (r) {
@@ -253,6 +265,142 @@
     }
   }
 
+  /* ---------- post body: preview + images ---------- */
+  function twoDigits(n) { return (n < 10 ? '0' : '') + n; }
+  function randomHex(byteCount) {
+    return Array.from(crypto.getRandomValues(new Uint8Array(byteCount)), function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('');
+  }
+  // images/2026/11/20261119-214530-a1b2c3.png: sorted by date, independent of the post's slug, which may not exist yet.
+  function newImagePath(extension) {
+    var d = new Date();
+    var stamp = d.getFullYear() + twoDigits(d.getMonth() + 1) + twoDigits(d.getDate()) + '-' +
+      twoDigits(d.getHours()) + twoDigits(d.getMinutes()) + twoDigits(d.getSeconds());
+    return IMAGE_DIR + '/' + d.getFullYear() + '/' + twoDigits(d.getMonth() + 1) + '/' + stamp + '-' + randomHex(IMAGE_NAME_RANDOM_BYTES) + '.' + extension;
+  }
+  // Pasted screenshots are all named "image.png", so they get a placeholder the author is meant to replace.
+  function imageAlt(file, isPasted) {
+    if (isPasted) return DEFAULT_IMAGE_ALT;
+    var name = file.name.replace(/\.[^.]*$/, '').replace(/[[\]\\\r\n]/g, ' ').trim().slice(0, MAX_ALT_LENGTH);
+    return name || DEFAULT_IMAGE_ALT;
+  }
+  // Splits files into accepted images and messages for the rest.
+  function checkImages(files) {
+    return files.reduce(function (result, file) {
+      if (!IMAGE_EXTENSIONS.has(file.type)) return { accepted: result.accepted, problems: result.problems.concat(['「' + file.name + '」不是 PNG、JPEG、GIF 或 WebP 圖片']) };
+      if (file.size > MAX_IMAGE_BYTES) return { accepted: result.accepted, problems: result.problems.concat(['「' + file.name + '」超過 ' + MAX_IMAGE_MB + ' MB，請先壓縮']) };
+      return { accepted: result.accepted.concat([file]), problems: result.problems };
+    }, { accepted: [], problems: [] });
+  }
+  function hasDraggedFiles(event) {
+    return Boolean(event.dataTransfer) && Array.prototype.indexOf.call(event.dataTransfer.types, 'Files') !== -1;
+  }
+  function readImageBase64(file) {
+    return file.arrayBuffer().then(function (buffer) { return bytesToBase64(new Uint8Array(buffer)); }, function (readError) {
+      console.error('Image read failed:', file.name, readError);
+      var error = new Error('Image read failed: ' + file.name);
+      error.userMessage = '讀不到圖片「' + file.name + '」，請重新插入一次。';
+      throw error;
+    });
+  }
+
+  // Returns { node, textarea, showWrite, uploadImages, dispose }. Images stay in the browser until uploadImages runs on save.
+  function postBodyEditor() {
+    var pendingImages = new Map(); // repo path -> { file, objectUrl, isUploaded }
+    var textarea = el('textarea', { id: 'postBody', class: 'md', spellcheck: 'false', value: '', 'aria-describedby': 'postBodyHint' });
+    var preview = el('div', { class: 'prose preview', hidden: true });
+    var picker = el('input', { type: 'file', accept: IMAGE_ACCEPT, multiple: true, hidden: true, onchange: function () {
+      insertImages(Array.from(picker.files), false); picker.value = '';
+    } });
+    var writeButton = el('button', { type: 'button', 'aria-pressed': 'true', text: '撰寫', onclick: function () { setPreviewing(false); textarea.focus(); } });
+    var previewButton = el('button', { type: 'button', 'aria-pressed': 'false', text: '預覽', onclick: function () { setPreviewing(true); } });
+    var node = el('div', { class: 'editor' }, [
+      el('div', { class: 'editor-bar' }, [
+        el('label', { class: 'f', for: 'postBody' }, ['內文（Markdown）']),
+        el('div', { class: 'acts' }, [
+          el('div', { class: 'tabs', role: 'group', 'aria-label': '編輯模式' }, [writeButton, previewButton]),
+          el('button', { type: 'button', class: 'btn btn-line', text: '插入圖片', onclick: function () { picker.click(); } })
+        ])
+      ]),
+      el('p', { class: 'editor-hint', id: 'postBodyHint', text: '程式碼區塊開頭的三個反引號後面寫上語言（例如 js、python、csharp）就會自動上色。圖片可以拖曳、貼上或按「插入圖片」，儲存文章時才會上傳。' }),
+      textarea, preview, picker
+    ]);
+
+    function resolvePreviewImage(src) {
+      var pending = pendingImages.get(src);
+      return pending ? pending.objectUrl : new URL(src, SITE_ROOT_URL).href;
+    }
+    function renderPreview() {
+      if (!textarea.value.trim()) { preview.replaceChildren(el('p', { class: 'muted', text: '還沒有內容可以預覽。' })); return; }
+      var isRendered = Boolean(window.ggrstMarkdown && window.ggrstMarkdown.renderInto(preview, textarea.value, { resolveImageSource: resolvePreviewImage }));
+      if (!isRendered) preview.replaceChildren(el('p', { class: 'err', text: '預覽元件沒有載入，請重新整理頁面。' }));
+    }
+    function setPreviewing(isPreviewing) {
+      writeButton.setAttribute('aria-pressed', String(!isPreviewing));
+      previewButton.setAttribute('aria-pressed', String(isPreviewing));
+      textarea.hidden = isPreviewing; preview.hidden = !isPreviewing;
+      if (isPreviewing) renderPreview();
+    }
+    // Puts the snippet on its own paragraph at the caret, then fires input so the form is marked dirty.
+    function insertBlock(snippet) {
+      var start = textarea.selectionStart, before = textarea.value.slice(0, start);
+      var lead = !before || /\n\n$/.test(before) ? '' : (/\n$/.test(before) ? '\n' : '\n\n');
+      textarea.setRangeText(lead + snippet + '\n\n', start, textarea.selectionEnd, 'end');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      if (!preview.hidden) renderPreview();
+    }
+    function insertImages(files, isPasted) {
+      var checked = checkImages(files);
+      if (checked.problems.length) toast(checked.problems.join('；') + '。', true);
+      if (!checked.accepted.length) return;
+      insertBlock(checked.accepted.map(function (file) {
+        var path = newImagePath(IMAGE_EXTENSIONS.get(file.type));
+        pendingImages.set(path, { file: file, objectUrl: URL.createObjectURL(file), isUploaded: false });
+        return '![' + imageAlt(file, isPasted) + '](' + path + ')';
+      }).join('\n\n'));
+      if (!checked.problems.length) toast('已插入 ' + checked.accepted.length + ' 張圖片，儲存文章時會一起上傳。');
+    }
+
+    textarea.addEventListener('dragover', function (event) {
+      if (!hasDraggedFiles(event)) return;
+      event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; node.classList.add('dropping');
+    });
+    textarea.addEventListener('dragleave', function () { node.classList.remove('dropping'); });
+    textarea.addEventListener('drop', function (event) {
+      node.classList.remove('dropping');
+      if (!hasDraggedFiles(event)) return;
+      event.preventDefault(); textarea.focus();
+      insertImages(Array.from(event.dataTransfer.files), false);
+    });
+    // Spreadsheet and office copies carry text plus a picture of it; the text is what the author meant to paste.
+    textarea.addEventListener('paste', function (event) {
+      var clipboard = event.clipboardData;
+      if (!clipboard || clipboard.getData('text/plain')) return;
+      var images = Array.from(clipboard.files).filter(function (file) { return file.type.indexOf('image/') === 0; });
+      if (!images.length) return;
+      event.preventDefault(); insertImages(images, true);
+    });
+
+    // Uploads the not-yet-uploaded images the Markdown still references, one commit at a time:
+    // parallel commits to one branch make GitHub reject all but the first.
+    function uploadImages(markdown, onProgress) {
+      var waiting = Array.from(pendingImages.keys()).filter(function (path) {
+        return !pendingImages.get(path).isUploaded && markdown.indexOf(path) !== -1;
+      });
+      return waiting.reduce(function (chain, path, index) {
+        return chain.then(function () {
+          var image = pendingImages.get(path);
+          onProgress(index + 1, waiting.length);
+          return readImageBase64(image.file)
+            .then(function (base64) { return putContent(path, base64, null, commitMsg('add image ' + path)); })
+            .then(function () { pendingImages.set(path, Object.assign({}, image, { isUploaded: true })); });
+        });
+      }, Promise.resolve());
+    }
+    function dispose() { pendingImages.forEach(function (image) { URL.revokeObjectURL(image.objectUrl); }); }
+
+    return { node: node, textarea: textarea, showWrite: function () { setPreviewing(false); }, uploadImages: uploadImages, dispose: dispose };
+  }
+
   /* ---------- posts ---------- */
   function editPost(p) {
     var isNew = !p;
@@ -262,7 +410,8 @@
     var date = el('input', { type: 'date', value: p ? p.date : today() });
     var tz = el('input', { type: 'text', value: p ? p.title.zh : '' }), te = el('input', { type: 'text', value: p ? (p.title.en || '') : '' });
     var ez = el('textarea', { rows: '2', value: p ? (p.excerpt.zh || '') : '' }), ee = el('textarea', { rows: '2', value: p ? (p.excerpt.en || '') : '' });
-    var body = el('textarea', { class: 'md', spellcheck: 'false', value: '' });
+    var bodyEditor = postBodyEditor();
+    var body = bodyEditor.textarea;
     var err = el('p', { class: 'err', role: 'alert' });
     var save = el('button', { type: 'submit', class: 'btn btn-solid', text: isNew ? '發佈文章' : '儲存變更' });
     var bodySha = null;
@@ -275,23 +424,25 @@
       if (!SLUG_PATTERN.test(s)) return bad(slug, '網址代稱只能用小寫英文、數字和連字號，例如 botw-first-week。');
       if (isNew && state.posts.some(function (x) { return x.slug === s; })) return bad(slug, '已經有文章用了「' + s + '」，請換一個網址代稱。');
       if (!tz.value.trim()) return bad(tz, '請填中文標題。');
-      if (!body.value.trim()) return bad(body, '內文是空的，請先寫點內容。');
+      if (!body.value.trim()) { bodyEditor.showWrite(); return bad(body, '內文是空的，請先寫點內容。'); }
       var meta = { slug: s, cat: cat.value, date: date.value || today(),
         title: { zh: tz.value.trim(), en: te.value.trim() }, excerpt: { zh: ez.value.trim(), en: ee.value.trim() } };
       var next = state.posts.filter(function (x) { return x.slug !== s; }).concat([meta]);
+      var markdown = body.value.replace(/\r\n/g, '\n');
       busy(save, true);
-      putFile('posts/' + s + '.md', body.value.replace(/\r\n/g, '\n'), bodySha, commitMsg((isNew ? 'add' : 'update') + ' post ' + s))
+      bodyEditor.uploadImages(markdown, function (done, total) { save.textContent = '上傳圖片 ' + done + '/' + total + '…'; })
+        .then(function () { save.textContent = '儲存中…'; return putFile('posts/' + s + '.md', markdown, bodySha, commitMsg((isNew ? 'add' : 'update') + ' post ' + s)); })
         .then(function (sha) { bodySha = sha; return putFile('data/posts.json', JSON.stringify(next, null, 2) + '\n', state.postsSha, commitMsg('update post index for ' + s)); })
-        .then(function (sha) { state.posts = next; state.postsSha = sha; setDirty(false); busy(save, false); saved(); renderList(); })
+        .then(function (sha) { state.posts = next; state.postsSha = sha; setDirty(false); busy(save, false); bodyEditor.dispose(); saved(); renderList(); })
         .catch(function (e) { busy(save, false); onFail(e); });
     } }, [
       el('div', { class: 'grid2' }, [field('中文標題', tz), field('英文標題', te, '可留空，英文版會改用中文標題')]),
       el('div', { class: 'grid2' }, [field('中文摘要', ez, '列表上的一句話介紹'), field('英文摘要', ee)]),
       el('div', { class: 'grid2' }, [field('分類', cat), field('日期', date)]),
       field('網址代稱', slug, isNew ? '文章網址會是 ggrst.io/post.html?p=這個值，建立後不能改' : '建立後不能修改'),
-      field('內文（Markdown）', body, '支援標題、清單、連結、圖片、程式碼區塊'),
+      bodyEditor.node,
       err,
-      el('div', { class: 'acts' }, [save, el('button', { type: 'button', class: 'btn btn-line', text: '取消', onclick: function () { if (leaveOk()) { setDirty(false); renderList(); } } })])
+      el('div', { class: 'acts' }, [save, el('button', { type: 'button', class: 'btn btn-line', text: '取消', onclick: function () { if (leaveOk()) { setDirty(false); bodyEditor.dispose(); renderList(); } } })])
     ]);
     app.innerHTML = '';
     app.appendChild(el('div', { class: 'stack' }, [el('h1', { text: isNew ? '新增文章' : '編輯文章' }), form]));

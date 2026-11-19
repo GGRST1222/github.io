@@ -19,6 +19,12 @@
 
 用 GitHub token 登入後，可以新增、編輯、刪除文章和遊戲存檔。每次儲存都會直接 commit 到這個 repo，GitHub Pages 約 1 分鐘後更新。
 
+### 寫文章
+
+- **預覽**：內文上方切到「預覽」，畫面和文章頁的排版一樣。
+- **圖片**：拖曳到內文、直接貼上截圖，或按「插入圖片」。支援 PNG、JPEG、GIF、WebP，每張最多 5 MB。圖片先留在瀏覽器裡，按儲存時才上傳到 `images/<年>/<月>/`；沒用到的圖片不會上傳。
+- **程式碼上色**：程式碼區塊開頭的 ```` ``` ```` 後寫上語言，例如 ```` ```js ````、```` ```python ````、```` ```csharp ````、```` ```powershell ````。沒寫語言或不認得的語言會顯示成純文字。
+
 ### 取得 token
 
 1. 打開 [GitHub 新增 fine-grained token](https://github.com/settings/personal-access-tokens/new)
@@ -42,8 +48,12 @@
 │   ├── games.json    # 遊戲存檔
 │   └── posts.json    # 文章列表（標題、摘要、分類、日期）
 ├── posts/            # 文章內文，每篇一個 <網址代稱>.md
+├── images/           # 文章圖片，後台上傳時自動建立（images/<年>/<月>/）
 ├── assets/
-│   ├── site.css      # 共用色彩與樣式
+│   ├── site.css      # 共用色彩與樣式（含程式碼上色的顏色）
+│   ├── prose.css     # 文章內文樣式，文章頁和後台預覽共用
+│   ├── markdown.js   # Markdown → HTML（marked → DOMPurify → highlight.js），文章頁和後台預覽共用
+│   ├── vendor/       # 自己放的第三方檔：marked 12.0.2、DOMPurify 3.1.6、highlight.js 11.9.0（含 PowerShell）
 │   └── favicon.svg
 ├── CNAME             # 自訂網域 ggrst.io
 └── README.md
