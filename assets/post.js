@@ -192,10 +192,10 @@
     return;
   }
 
-  // The game card is owner-only: loadPrivateGames() resolves to null for everyone else, never rejects.
-  Promise.all([fetchResource('/data/posts.json', true), window.ggrstSite.loadPrivateGames(), fetchResource('/posts/' + slug + '.md', false)])
+  // The game card appears when this viewer may see that save (owner: any, visitor: public). loadGames() never rejects.
+  Promise.all([fetchResource('/data/posts.json', true), window.ggrstSite.loadGames(), fetchResource('/posts/' + slug + '.md', false)])
     .then(function (results) {
-      renderPost(window.ggrstSite.publishedPosts(results[0]), results[1] || [], results[2]);
+      renderPost(window.ggrstSite.publishedPosts(results[0]), results[1].games, results[2]);
     })
     .catch(function (error) {
       if (error && error.notFound) {

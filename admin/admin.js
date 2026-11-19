@@ -7,6 +7,8 @@
   // Game saves are owner-only, so they live outside the public site repo.
   var SAVES_REPO = Object.freeze({ name: 'ggrst-saves', branch: 'master', label: '遊戲存檔' });
   var SAVES_FILE = 'games.json';
+  // Saves marked public are copied here, in the public site repo, for visitors.
+  var PUBLIC_GAMES_FILE = 'data/games-public.json';
   var TOKEN_KEY = 'ggrst-admin-token';
   var CATS = [['game', '遊戲'], ['code', '程式'], ['know', '知識']];
   var REGIONS = [['hebra', '赫布拉'], ['woodland', '森林'], ['eldin', '艾爾汀'], ['akkala', '阿卡萊'], ['tabantha', '塔邦塔'],
@@ -132,10 +134,18 @@
   }
   function putFile(path, text, sha, msg, repo) { return putContent(path, b64encode(text), sha, msg, repo); }
   function delFile(path, sha, msg) { return gh('DELETE', '/contents/' + path, { message: msg, sha: sha, branch: SITE_REPO.branch }); }
+  // A missing public file just means nothing is public yet; it is created on the first public save.
+  function getPublicGamesFile() {
+    return getFile(PUBLIC_GAMES_FILE).catch(function (e) {
+      if (e && e.status === 404) return { text: publicGamesText([]), sha: null };
+      throw e;
+    });
+  }
   function loadData() {
-    return Promise.all([getFile('data/posts.json'), getFile(SAVES_FILE, SAVES_REPO)]).then(function (r) {
+    return Promise.all([getFile('data/posts.json'), getFile(SAVES_FILE, SAVES_REPO), getPublicGamesFile()]).then(function (r) {
       state.posts = JSON.parse(r[0].text); state.postsSha = r[0].sha;
       state.games = JSON.parse(r[1].text); state.gamesSha = r[1].sha;
+      state.publicGamesText = r[2].text; state.publicGamesSha = r[2].sha;
     });
   }
   function onFail(e) {
@@ -290,7 +300,8 @@
         var del = el('button', { type: 'button', class: 'btn btn-danger', text: '刪除' });
         armDelete(del, function () { deleteGame(i, del); });
         gl.appendChild(el('li', {}, [
-          el('div', {}, [el('div', { class: 't', text: g.name.zh || g.name.en }), el('div', { class: 's', text: [g.platform, '里程碑 ' + done + '/' + tot].filter(Boolean).join(' · ') })]),
+          el('div', {}, [el('div', { class: 't' }, [g.name.zh || g.name.en, el('span', { class: 'badge' + (g.public ? ' on' : ''), text: g.public ? '公開' : '僅自己' })]),
+            el('div', { class: 's', text: [g.platform, '里程碑 ' + done + '/' + tot].filter(Boolean).join(' · ') })]),
           el('div', { class: 'acts' }, [el('button', { type: 'button', class: 'btn btn-line', text: '編輯', onclick: function () { editGame(i); } }), del])
         ]));
       });
@@ -710,10 +721,37 @@
   }
 
   /* ---------- games ---------- */
+  function publicGamesText(games) {
+    return JSON.stringify(games.filter(function (g) { return g.public; }), null, 2) + '\n';
+  }
+  // Writes the public copy only when the public subset changed, so editing a private save leaves
+  // no commit in the public repo. The commit message names no game for the same reason.
+  function syncPublicGames(games) {
+    var nextText = publicGamesText(games);
+    if (nextText === state.publicGamesText) return Promise.resolve(false);
+    return putFile(PUBLIC_GAMES_FILE, nextText, state.publicGamesSha, commitMsg('update public game saves')).then(function (sha) {
+      state.publicGamesText = nextText; state.publicGamesSha = sha;
+      return true;
+    });
+  }
   function saveGames(next, btn, msg) {
     busy(btn, true);
     return putFile(SAVES_FILE, JSON.stringify(next, null, 2) + '\n', state.gamesSha, commitMsg(msg), SAVES_REPO)
-      .then(function (sha) { state.games = next; state.gamesSha = sha; setDirty(false); busy(btn, false); saved(); renderList(); })
+      .then(function (sha) {
+        state.games = next; state.gamesSha = sha; setDirty(false);
+        return syncPublicGames(next).catch(function (e) {
+          console.error('Public saves not updated:', e);
+          var error = new Error('Public saves not updated');
+          error.status = e && e.status;
+          error.userMessage = '存檔已儲存，但網站上的公開版本沒有更新（' + explain(e) + '）。再按一次儲存會重試。';
+          throw error;
+        });
+      })
+      .then(function (isPublicChanged) {
+        busy(btn, false);
+        if (isPublicChanged) saved(); else toast('已儲存。這個變更只有你看得到。');
+        renderList();
+      })
       .catch(function (e) { busy(btn, false); onFail(e); });
   }
   function deleteGame(i, btn) {
@@ -809,6 +847,7 @@
     var plats = el('datalist', { id: 'plats' }, ['Switch', 'Switch 2', 'PC', 'PS5', 'Xbox', '手機'].map(function (x) { return el('option', { value: x }); }));
     var gid = el('input', { type: 'text', value: g.id, readonly: !isNew, spellcheck: 'false', autocomplete: 'off' });
     var noteZ = el('textarea', { rows: '3', value: (g.note && g.note.zh) || '' }), noteE = el('textarea', { rows: '3', value: (g.note && g.note.en) || '' });
+    var isPublic = el('input', { type: 'checkbox', checked: Boolean(g.public) });
     var err = el('p', { class: 'err', role: 'alert' });
     var save = el('button', { type: 'submit', class: 'btn btn-solid', text: isNew ? '建立存檔' : '儲存變更' });
     var milestones = milestoneEditor(g.milestones || []);
@@ -830,6 +869,7 @@
       var out = { id: id, name: { zh: nz.value.trim(), en: ne.value.trim() }, platform: plat.value.trim(),
         milestones: milestones.read(), collect: collected.items, note: { zh: noteZ.value.trim(), en: noteE.value.trim() } };
       if (g.map) { out.map = g.map; out.towers = towers ? towers.read() : {}; }
+      if (isPublic.checked) out.public = true;
       var next = isNew ? state.games.concat([out]) : state.games.map(function (x, k) { return k === i ? out : x; });
       saveGames(next, save, (isNew ? 'add game ' : 'update game ') + id);
     }
@@ -847,6 +887,7 @@
         el('div', {}, [el('button', { type: 'button', class: 'btn btn-line', text: '新增收集項目', onclick: function () { collection.add({}).focus(); setDirty(true); } })])]),
       towers ? el('fieldset', { class: 'stack' }, [el('legend', { text: '海拉魯地圖塔區' }), towers.node]) : null,
       el('div', { class: 'grid2' }, [field('最近進度（中文）', noteZ, '顯示在首頁存檔上'), field('最近進度（英文）', noteE)]),
+      el('label', { class: 'chk' }, [isPublic, el('span', {}, ['公開這個存檔', el('span', { class: 'hint', text: '　勾選後訪客也看得到；沒勾只有登入後台的你看得到' })])]),
       err,
       el('div', { class: 'acts' }, [save, el('button', { type: 'button', class: 'btn btn-line', text: '取消', onclick: function () { if (leaveOk()) { setDirty(false); renderList(); } } })])
     ]);
