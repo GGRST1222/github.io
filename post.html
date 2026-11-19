@@ -6,12 +6,13 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>文章 · ggrst.io</title>
 <meta name="theme-color" content="#1C2140">
-<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/site.css">
-<link rel="stylesheet" href="assets/prose.css">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/assets/prose.css">
+<link rel="alternate" type="application/rss+xml" title="ggrst.io" href="/feed.xml">
 <style>
 .post{max-width:72ch;margin:0 auto;padding:64px 24px 120px}
 .back{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:700;color:var(--mute);text-decoration:none}
@@ -22,33 +23,57 @@
 .cat i{width:10px;height:10px;border-radius:3px}
 .cat i.know{border:2px solid var(--ink)}
 .post h1{margin-top:14px;font-size:clamp(32px,5vw,52px);font-weight:900;font-stretch:112%}
+.toc{margin:0 0 36px;padding:16px 20px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.toc summary{cursor:pointer;min-height:32px;display:flex;align-items:center;font-weight:800}
+.toc ol{margin:8px 0 0;padding-left:1.3em;display:grid;gap:4px}
+.toc li.sub{margin-left:1.2em;list-style:circle}
+.toc a{color:var(--mute);text-decoration:none;font-weight:600}
+.toc a:hover{color:var(--cobalt);text-decoration:underline}
+.game-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;margin:0 0 36px;padding:16px 20px;border-radius:14px;background:var(--screen);color:var(--on-screen);text-decoration:none}
+.game-card:hover{background:var(--screen-2)}
+.game-card .gk{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--on-screen-mute)}
+.game-card .gn{font-weight:800;font-size:18px}
+.game-card .gp{grid-row:1/3;grid-column:2;font-size:28px;font-weight:900;color:var(--amber)}
+.game-card .gb{grid-column:1/3;height:6px;border-radius:3px;background:var(--screen-2);overflow:hidden}
+.game-card .gb i{display:block;height:100%;background:var(--amber);transform-origin:left}
+.pager{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:56px;padding-top:28px;border-top:1.5px solid var(--ink)}
+.pager a{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--card);text-decoration:none;min-height:44px}
+.pager a:hover{border-color:var(--cobalt)}
+.pager .pk{font-size:13px;font-weight:700;color:var(--mute)}
+.pager .pt{font-weight:800;overflow-wrap:anywhere}
+.pager .next{grid-column:2;text-align:right}
+.lightbox{max-width:min(96vw,1400px);max-height:94vh;padding:0;border:0;border-radius:14px;background:transparent}
+.lightbox::backdrop{background:rgba(12,14,30,.86)}
+.lightbox img{display:block;max-width:100%;max-height:94vh;margin:0 auto;border-radius:14px;cursor:zoom-out}
+.lightbox button{position:fixed;top:16px;right:16px;min-width:44px;min-height:44px;border:0;border-radius:999px;background:var(--paper);color:var(--ink);font-size:22px;font-weight:700}
 .msg{color:var(--mute)}
 .msg a{color:var(--cobalt);font-weight:700}
-@media (max-width:640px){.post{padding:40px 16px 96px}}
+@media (max-width:640px){.post{padding:40px 16px 96px}.pager{grid-template-columns:minmax(0,1fr)}.pager .next{grid-column:1}}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">跳到主內容</a>
 <header class="site-head">
 <div class="wrap">
-<a href="./" class="logo" aria-label="ggrst.io 首頁">ggrst<span>.io</span></a>
+<a href="/" class="logo" aria-label="ggrst.io 首頁">ggrst<span>.io</span></a>
 <nav class="site-nav" aria-label="主選單">
-<a href="./#posts">任務日誌</a>
-<a href="./#games">遊戲</a>
+<a href="/#posts">任務日誌</a>
+<a href="/#games">遊戲</a>
 </nav>
 </div>
 </header>
 <main id="main" tabindex="-1">
 <article class="post">
-<a class="back" href="./#posts"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>回任務日誌</a>
+<a class="back" href="/#posts"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>回任務日誌</a>
 <div id="out" aria-live="polite"><p class="msg">讀取文章中…</p></div>
 </article>
 </main>
-<script src="assets/vendor/marked.min.js"></script>
-<script src="assets/vendor/purify.min.js"></script>
-<script src="assets/vendor/highlight.min.js"></script>
-<script src="assets/vendor/highlight-powershell.min.js"></script>
-<script src="assets/markdown.js"></script>
-<script src="assets/post.js"></script>
+<script src="/assets/vendor/marked.min.js"></script>
+<script src="/assets/vendor/purify.min.js"></script>
+<script src="/assets/vendor/highlight.min.js"></script>
+<script src="/assets/vendor/highlight-powershell.min.js"></script>
+<script src="/assets/site-data.js"></script>
+<script src="/assets/markdown.js"></script>
+<script src="/assets/post.js"></script>
 </body>
 </html>

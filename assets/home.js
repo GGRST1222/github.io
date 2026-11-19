@@ -9,7 +9,7 @@
       game: '遊戲', code: '程式', know: '知識', all: '全部', filterAria: '依主題篩選文章',
       noPosts: '第一篇文章還在寫。', noPostsLink: '先去看看遊戲存檔', noPostsCat: '這個主題還沒有文章。', showAll: '看全部文章',
       read: '閱讀',
-      milestones: '里程碑', collect: '收集', lastNote: '最近進度', msDone: '已完成', msTodo: '未完成', newTab: '（在新分頁開啟）',
+      milestones: '里程碑', collect: '收集', lastNote: '最近進度', relatedPosts: '相關日誌', msDone: '已完成', msTodo: '未完成', newTab: '（在新分頁開啟）',
       notStarted: '未開始', playing: '進行中', cleared: '已破關',
       mapTitle: '海拉魯地圖：塔區進度', towersLabel: '已開塔', fullMap: '完整互動地圖',
       st0: '未開塔', st1: '已開塔', st2: '已探索', mapNote: '示意圖，位置與比例為概略',
@@ -29,7 +29,7 @@
       noPosts: 'The first post is still being written.', noPostsLink: 'See my save files meanwhile', noPostsCat: 'No posts on this topic yet.', showAll: 'Show all posts',
       read: 'Read',
       gamesTitle: 'Save files', gamesSub: 'What I am playing and how far I have got. Open a save for milestones and collections.',
-      milestones: 'Milestones', collect: 'Collection', lastNote: 'Latest', msDone: 'done', msTodo: 'not done',
+      milestones: 'Milestones', collect: 'Collection', lastNote: 'Latest', relatedPosts: 'Related posts', msDone: 'done', msTodo: 'not done',
       notStarted: 'Not started', playing: 'Playing', cleared: 'Cleared',
       mapTitle: 'Hyrule map: tower regions', towersLabel: 'Towers', fullMap: 'Full interactive map',
       st0: 'Tower locked', st1: 'Tower active', st2: 'Explored', mapNote: 'Schematic, positions and scale are approximate',
@@ -85,14 +85,7 @@
   function pick(o, zh) { if (!o) return ''; return (zh ? o.zh : o.en) || o.zh || o.en || ''; }
   function clampN(v, max) { v = Number(v) || 0; return Math.max(0, Math.min(max || 0, v)); }
 
-  function gameStats(g) {
-    var ms = g.milestones || [], n = 0;
-    ms.forEach(function (m) { if (m.done) n++; });
-    var pct = ms.length ? Math.round(n / ms.length * 100) : 0;
-    var started = n > 0 || (g.collect || []).some(function (c) { return c.got > 0; }) ||
-      Object.keys(g.towers || {}).some(function (k) { return g.towers[k] > 0; }) || !!(g.note && (g.note.zh || g.note.en));
-    return { n: n, total: ms.length, pct: pct, state: pct === 100 ? 'cleared' : started ? 'playing' : 'notStarted' };
-  }
+  var gameStats = window.ggrstSite.gameStats;
 
   function fmtDate(iso, zh) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
@@ -174,6 +167,14 @@
     ]);
   }
 
+  function relatedPostList(gameId, zh) {
+    var related = (state.posts || []).filter(function (p) { return p.game === gameId; });
+    if (!related.length) return null;
+    return el('ul', { class: 'related' }, related.map(function (p) {
+      return el('li', {}, [el('a', { href: window.ggrstSite.postUrl(p.slug) }, [pick(p.title, zh), el('time', { class: 'num', datetime: p.date, text: fmtDate(p.date, zh) })])]);
+    }));
+  }
+
   function renderSaves(t, zh) {
     var root = document.getElementById('saves');
     var openIds = {};
@@ -198,6 +199,8 @@
       var left = el('div', {}, [el('h4', { class: 'group-t', text: t.milestones }), ms]);
       var note = pick(g.note, zh).trim();
       if (note) left.appendChild(el('div', {}, [el('h4', { class: 'group-t', style: 'margin-top:22px', text: t.lastNote }), el('p', { class: 'note', style: 'margin:0', text: note })]));
+      var related = relatedPostList(g.id, zh);
+      if (related) left.appendChild(el('div', {}, [el('h4', { class: 'group-t', style: 'margin-top:22px', text: t.relatedPosts }), related]));
 
       var right = null;
       if ((g.collect || []).length) {
@@ -235,7 +238,7 @@
     var cta1 = document.getElementById('cta1'), cta2 = document.getElementById('cta2');
     if (state.error) { f.hidden = true; list.appendChild(el('li', {}, [failMsg(t, 'state')])); return; }
     if (!state.posts) return;
-    var posts = state.posts.slice().sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+    var posts = state.posts;
     var hasPosts = posts.length > 0;
     // No posts yet: the hero sends people to the saves instead of an empty log.
     cta1.href = hasPosts ? '#posts' : '#games';
@@ -260,7 +263,7 @@
     shown.forEach(function (p) {
       var cat = STRINGS[state.lang][p.cat] ? p.cat : 'know';
       list.appendChild(el('li', { class: 'quest' }, [
-        el('a', { href: 'post.html?p=' + encodeURIComponent(p.slug) }, [
+        el('a', { href: window.ggrstSite.postUrl(p.slug) }, [
           el('span', { class: 'when' }, [
             el('span', { class: 'cat' }, [el('i', { class: cat, style: cat === 'know' ? null : 'background:' + (cat === 'game' ? 'var(--amber)' : 'var(--cobalt)') }), t[cat]]),
             el('time', { datetime: p.date, class: 'num', text: fmtDate(p.date, zh) })
@@ -289,7 +292,7 @@
     state.error = false; state.games = null; render();
     Promise.all([getJSON('data/games.json'), getJSON('data/posts.json')]).then(function (res) {
       state.games = Array.isArray(res[0]) ? res[0] : [];
-      state.posts = Array.isArray(res[1]) ? res[1] : [];
+      state.posts = window.ggrstSite.publishedPosts(res[1]);
       render();
       if (/^#g-/.test(location.hash)) openSave(location.hash.slice(3));
     }).catch(function (error) {

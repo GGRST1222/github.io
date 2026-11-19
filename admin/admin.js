@@ -18,8 +18,20 @@
   var IMAGE_EXTENSIONS = new Map([['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/gif', 'gif'], ['image/webp', 'webp']]);
   var IMAGE_ACCEPT = Array.from(IMAGE_EXTENSIONS.keys()).join(',');
   var IMAGE_DIR = 'images';
-  var MAX_IMAGE_MB = 5;
-  var MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024;
+  var BYTES_PER_MB = 1024 * 1024;
+  var MAX_IMAGE_MB = 5; // per uploaded file, after compression
+  var MAX_IMAGE_BYTES = MAX_IMAGE_MB * BYTES_PER_MB;
+  var MAX_SOURCE_IMAGE_MB = 25; // phone photos before compression
+  var MAX_SOURCE_IMAGE_BYTES = MAX_SOURCE_IMAGE_MB * BYTES_PER_MB;
+  var COMPRESSIBLE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']); // not GIF: re-encoding drops the animation
+  var IMAGE_MAX_EDGE = 1600; // px; twice the 72ch column, sharp on high-density screens
+  var IMAGE_QUALITY = 0.85;
+  var COMPRESS_OVER_BYTES = 500 * 1024; // smaller images that already fit IMAGE_MAX_EDGE are uploaded as they are
+  var SPLIT_MIN_WIDTH = 1200; // px; below this the side-by-side panes are too narrow to read
+  var PREVIEW_DELAY_MS = 200;
+  var AUTOSAVE_PREFIX = 'ggrst-autosave:';
+  var AUTOSAVE_DELAY_MS = 800;
+  var LINK_PLACEHOLDER = 'https://';
   var IMAGE_NAME_RANDOM_BYTES = 3; // 6 hex characters, so two images saved in the same second don't collide
   var MAX_ALT_LENGTH = 80;
   var DEFAULT_IMAGE_ALT = '圖片說明';
@@ -130,7 +142,7 @@
     if (on) { btn.dataset.label = btn.textContent; btn.textContent = label || '儲存中…'; btn.disabled = true; }
     else { btn.textContent = btn.dataset.label || btn.textContent; btn.disabled = false; }
   }
-  function saved() { toast('已儲存。網站約 1 分鐘後更新。', false, ['看網站', '../']); }
+  function saved(link) { toast('已儲存。網站約 1 分鐘後更新。', false, link || ['看網站', '../']); }
 
   /* ---------- login ---------- */
   function readToken() {
@@ -244,7 +256,7 @@
         armDelete(del, function () { deletePost(p, del); });
         var cat = (CATS.filter(function (c) { return c[0] === p.cat; })[0] || ['', ''])[1];
         ul.appendChild(el('li', {}, [
-          el('div', {}, [el('div', { class: 't', text: (p.title && p.title.zh) || p.slug }), el('div', { class: 's', text: [cat, p.date, p.slug].filter(Boolean).join(' · ') })]),
+          el('div', {}, [el('div', { class: 't' }, [(p.title && p.title.zh) || p.slug, p.draft ? el('span', { class: 'badge', text: '草稿' }) : null]), el('div', { class: 's', text: [cat, p.date, p.slug].filter(Boolean).join(' · ') })]),
           el('div', { class: 'acts' }, [el('button', { type: 'button', class: 'btn btn-line', text: '編輯', onclick: function () { editPost(p); } }), del])
         ]));
       });
@@ -265,12 +277,12 @@
     }
   }
 
-  /* ---------- post body: preview + images ---------- */
+  /* ---------- post body: images ---------- */
   function twoDigits(n) { return (n < 10 ? '0' : '') + n; }
   function randomHex(byteCount) {
     return Array.from(crypto.getRandomValues(new Uint8Array(byteCount)), function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('');
   }
-  // images/2026/11/20261119-214530-a1b2c3.png: sorted by date, independent of the post's slug, which may not exist yet.
+  // images/2026/11/20261119-214530-a1b2c3.webp: sorted by date, independent of the post's slug, which may not exist yet.
   function newImagePath(extension) {
     var d = new Date();
     var stamp = d.getFullYear() + twoDigits(d.getMonth() + 1) + twoDigits(d.getDate()) + '-' +
@@ -283,13 +295,38 @@
     var name = file.name.replace(/\.[^.]*$/, '').replace(/[[\]\\\r\n]/g, ' ').trim().slice(0, MAX_ALT_LENGTH);
     return name || DEFAULT_IMAGE_ALT;
   }
-  // Splits files into accepted images and messages for the rest.
-  function checkImages(files) {
+  // Splits files into accepted images and messages for the rest; maxBytes is checked again after compression.
+  function checkImages(files, maxBytes, sizeMessage) {
     return files.reduce(function (result, file) {
       if (!IMAGE_EXTENSIONS.has(file.type)) return { accepted: result.accepted, problems: result.problems.concat(['「' + file.name + '」不是 PNG、JPEG、GIF 或 WebP 圖片']) };
-      if (file.size > MAX_IMAGE_BYTES) return { accepted: result.accepted, problems: result.problems.concat(['「' + file.name + '」超過 ' + MAX_IMAGE_MB + ' MB，請先壓縮']) };
+      if (file.size > maxBytes) return { accepted: result.accepted, problems: result.problems.concat(['「' + file.name + '」' + sizeMessage]) };
       return { accepted: result.accepted.concat([file]), problems: result.problems };
     }, { accepted: [], problems: [] });
+  }
+  function canvasToBlob(canvas, type, quality) {
+    return new Promise(function (resolve) { canvas.toBlob(resolve, type, quality); });
+  }
+  // Shrinks photos to IMAGE_MAX_EDGE and re-encodes them as WebP. GIFs keep their animation, and any image
+  // the browser cannot decode or shrink is uploaded unchanged.
+  function compressImage(file) {
+    if (!COMPRESSIBLE_TYPES.has(file.type) || typeof createImageBitmap !== 'function') return Promise.resolve(file);
+    return createImageBitmap(file).then(function (bitmap) {
+      var scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+      if (scale === 1 && file.size <= COMPRESS_OVER_BYTES) { bitmap.close(); return file; }
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      return canvasToBlob(canvas, 'image/webp', IMAGE_QUALITY).then(function (blob) {
+        // A browser that cannot encode WebP returns PNG, usually larger than the original: keep the original then.
+        if (!blob || blob.type !== 'image/webp' || blob.size >= file.size) return file;
+        return new File([blob], file.name.replace(/\.[^.]*$/, '') + '.webp', { type: 'image/webp' });
+      });
+    }, function (decodeError) {
+      console.warn('Could not decode image, uploading it unchanged:', file.name, decodeError);
+      return file;
+    });
   }
   function hasDraggedFiles(event) {
     return Boolean(event.dataTransfer) && Array.prototype.indexOf.call(event.dataTransfer.types, 'Files') !== -1;
@@ -303,26 +340,34 @@
     });
   }
 
-  // Returns { node, textarea, showWrite, uploadImages, dispose }. Images stay in the browser until uploadImages runs on save.
+  /* ---------- post body: editor ---------- */
+  // Returns { node, textarea, showWrite, uploadImages, pendingImageCount, dispose }.
+  // Images stay in the browser until uploadImages runs on save.
   function postBodyEditor() {
     var pendingImages = new Map(); // repo path -> { file, objectUrl, isUploaded }
+    var splitQuery = window.matchMedia('(min-width: ' + SPLIT_MIN_WIDTH + 'px)');
+    var mode = 'write', previewTimer = null;
     var textarea = el('textarea', { id: 'postBody', class: 'md', spellcheck: 'false', value: '', 'aria-describedby': 'postBodyHint' });
-    var preview = el('div', { class: 'prose preview', hidden: true });
+    var preview = el('div', { class: 'prose preview', hidden: true, 'aria-label': '預覽' });
     var picker = el('input', { type: 'file', accept: IMAGE_ACCEPT, multiple: true, hidden: true, onchange: function () {
       insertImages(Array.from(picker.files), false); picker.value = '';
     } });
-    var writeButton = el('button', { type: 'button', 'aria-pressed': 'true', text: '撰寫', onclick: function () { setPreviewing(false); textarea.focus(); } });
-    var previewButton = el('button', { type: 'button', 'aria-pressed': 'false', text: '預覽', onclick: function () { setPreviewing(true); } });
+    var modeButtons = {
+      write: el('button', { type: 'button', 'aria-pressed': 'true', text: '撰寫', onclick: function () { setMode('write'); textarea.focus(); } }),
+      preview: el('button', { type: 'button', 'aria-pressed': 'false', text: '預覽', onclick: function () { setMode('preview'); } }),
+      split: el('button', { type: 'button', 'aria-pressed': 'false', text: '並排', hidden: !splitQuery.matches, onclick: function () { setMode('split'); textarea.focus(); } })
+    };
     var node = el('div', { class: 'editor' }, [
       el('div', { class: 'editor-bar' }, [
         el('label', { class: 'f', for: 'postBody' }, ['內文（Markdown）']),
         el('div', { class: 'acts' }, [
-          el('div', { class: 'tabs', role: 'group', 'aria-label': '編輯模式' }, [writeButton, previewButton]),
+          el('div', { class: 'tabs', role: 'group', 'aria-label': '編輯模式' }, [modeButtons.write, modeButtons.preview, modeButtons.split]),
           el('button', { type: 'button', class: 'btn btn-line', text: '插入圖片', onclick: function () { picker.click(); } })
         ])
       ]),
-      el('p', { class: 'editor-hint', id: 'postBodyHint', text: '程式碼區塊開頭的三個反引號後面寫上語言（例如 js、python、csharp）就會自動上色。圖片可以拖曳、貼上或按「插入圖片」，儲存文章時才會上傳。' }),
-      textarea, preview, picker
+      el('p', { class: 'editor-hint', id: 'postBodyHint', text: '程式碼區塊開頭的三個反引號後面寫上語言（例如 js、python、csharp）就會自動上色。圖片可以拖曳、貼上或按「插入圖片」，大圖會自動縮小，儲存文章時才上傳。快捷鍵：Ctrl+B 粗體、Ctrl+I 斜體、Ctrl+K 連結。' }),
+      el('div', { class: 'panes' }, [textarea, preview]),
+      picker
     ]);
 
     function resolvePreviewImage(src) {
@@ -334,30 +379,85 @@
       var isRendered = Boolean(window.ggrstMarkdown && window.ggrstMarkdown.renderInto(preview, textarea.value, { resolveImageSource: resolvePreviewImage }));
       if (!isRendered) preview.replaceChildren(el('p', { class: 'err', text: '預覽元件沒有載入，請重新整理頁面。' }));
     }
-    function setPreviewing(isPreviewing) {
-      writeButton.setAttribute('aria-pressed', String(!isPreviewing));
-      previewButton.setAttribute('aria-pressed', String(isPreviewing));
-      textarea.hidden = isPreviewing; preview.hidden = !isPreviewing;
-      if (isPreviewing) renderPreview();
+    function setMode(nextMode) {
+      mode = nextMode === 'split' && !splitQuery.matches ? 'write' : nextMode;
+      Object.keys(modeButtons).forEach(function (key) { modeButtons[key].setAttribute('aria-pressed', String(key === mode)); });
+      textarea.hidden = mode === 'preview';
+      preview.hidden = mode === 'write';
+      node.classList.toggle('split', mode === 'split');
+      app.classList.toggle('wide', mode === 'split');
+      if (mode !== 'write') renderPreview();
     }
-    // Puts the snippet on its own paragraph at the caret, then fires input so the form is marked dirty.
+    splitQuery.addEventListener('change', function () {
+      modeButtons.split.hidden = !splitQuery.matches;
+      if (mode === 'split' && !splitQuery.matches) setMode('write');
+    });
+    textarea.addEventListener('input', function () {
+      if (mode !== 'split') return;
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(renderPreview, PREVIEW_DELAY_MS);
+    });
+
+    // execCommand keeps the edit on the textarea's undo stack (Ctrl+Z); setRangeText is the fallback where it is gone.
+    function replaceRange(text, start, end) {
+      textarea.focus();
+      textarea.setSelectionRange(start, end);
+      var isInserted = typeof document.execCommand === 'function' && document.execCommand('insertText', false, text);
+      if (!isInserted) {
+        textarea.setRangeText(text, start, end, 'end');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    function wrapSelection(before, after, placeholder) {
+      var start = textarea.selectionStart, end = textarea.selectionEnd;
+      var selected = textarea.value.slice(start, end) || placeholder;
+      replaceRange(before + selected + after, start, end);
+      textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+    }
+    function insertLink() {
+      var start = textarea.selectionStart, end = textarea.selectionEnd;
+      var text = textarea.value.slice(start, end) || '連結文字';
+      replaceRange('[' + text + '](' + LINK_PLACEHOLDER + ')', start, end);
+      var urlStart = start + text.length + 3;
+      textarea.setSelectionRange(urlStart, urlStart + LINK_PLACEHOLDER.length);
+    }
+    var SHORTCUTS = new Map([
+      ['b', function () { wrapSelection('**', '**', '粗體文字'); }],
+      ['i', function () { wrapSelection('*', '*', '斜體文字'); }],
+      ['k', insertLink]
+    ]);
+    textarea.addEventListener('keydown', function (event) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      var action = SHORTCUTS.get(event.key.toLowerCase());
+      if (!action) return;
+      event.preventDefault();
+      action();
+    });
+
+    // Puts the snippet on its own paragraph at the caret.
     function insertBlock(snippet) {
       var start = textarea.selectionStart, before = textarea.value.slice(0, start);
       var lead = !before || /\n\n$/.test(before) ? '' : (/\n$/.test(before) ? '\n' : '\n\n');
-      textarea.setRangeText(lead + snippet + '\n\n', start, textarea.selectionEnd, 'end');
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      if (!preview.hidden) renderPreview();
+      replaceRange(lead + snippet + '\n\n', start, textarea.selectionEnd);
+      if (mode !== 'write') renderPreview();
     }
     function insertImages(files, isPasted) {
-      var checked = checkImages(files);
-      if (checked.problems.length) toast(checked.problems.join('；') + '。', true);
-      if (!checked.accepted.length) return;
-      insertBlock(checked.accepted.map(function (file) {
-        var path = newImagePath(IMAGE_EXTENSIONS.get(file.type));
-        pendingImages.set(path, { file: file, objectUrl: URL.createObjectURL(file), isUploaded: false });
-        return '![' + imageAlt(file, isPasted) + '](' + path + ')';
-      }).join('\n\n'));
-      if (!checked.problems.length) toast('已插入 ' + checked.accepted.length + ' 張圖片，儲存文章時會一起上傳。');
+      var checked = checkImages(files, MAX_SOURCE_IMAGE_BYTES, '超過 ' + MAX_SOURCE_IMAGE_MB + ' MB，請先縮小');
+      if (!checked.accepted.length) { if (checked.problems.length) toast(checked.problems.join('；') + '。', true); return; }
+      toast('處理 ' + checked.accepted.length + ' 張圖片中…');
+      Promise.all(checked.accepted.map(compressImage)).then(function (prepared) {
+        var final = checkImages(prepared, MAX_IMAGE_BYTES, '縮小後仍超過 ' + MAX_IMAGE_MB + ' MB，請先壓縮');
+        var problems = checked.problems.concat(final.problems);
+        if (final.accepted.length) {
+          insertBlock(final.accepted.map(function (file) {
+            var path = newImagePath(IMAGE_EXTENSIONS.get(file.type));
+            pendingImages.set(path, { file: file, objectUrl: URL.createObjectURL(file), isUploaded: false });
+            return '![' + imageAlt(file, isPasted) + '](' + path + ')';
+          }).join('\n\n'));
+        }
+        if (problems.length) toast(problems.join('；') + '。', true);
+        else toast('已插入 ' + final.accepted.length + ' 張圖片，儲存文章時會一起上傳。');
+      });
     }
 
     textarea.addEventListener('dragover', function (event) {
@@ -380,12 +480,15 @@
       event.preventDefault(); insertImages(images, true);
     });
 
+    function waitingImagePaths(markdown) {
+      return Array.from(pendingImages.keys()).filter(function (path) {
+        return !pendingImages.get(path).isUploaded && markdown.indexOf(path) !== -1;
+      });
+    }
     // Uploads the not-yet-uploaded images the Markdown still references, one commit at a time:
     // parallel commits to one branch make GitHub reject all but the first.
     function uploadImages(markdown, onProgress) {
-      var waiting = Array.from(pendingImages.keys()).filter(function (path) {
-        return !pendingImages.get(path).isUploaded && markdown.indexOf(path) !== -1;
-      });
+      var waiting = waitingImagePaths(markdown);
       return waiting.reduce(function (chain, path, index) {
         return chain.then(function () {
           var image = pendingImages.get(path);
@@ -396,63 +499,180 @@
         });
       }, Promise.resolve());
     }
-    function dispose() { pendingImages.forEach(function (image) { URL.revokeObjectURL(image.objectUrl); }); }
+    function dispose() {
+      clearTimeout(previewTimer);
+      app.classList.remove('wide');
+      pendingImages.forEach(function (image) { URL.revokeObjectURL(image.objectUrl); });
+    }
 
-    return { node: node, textarea: textarea, showWrite: function () { setPreviewing(false); }, uploadImages: uploadImages, dispose: dispose };
+    return { node: node, textarea: textarea, showWrite: function () { setMode('write'); }, uploadImages: uploadImages,
+      pendingImageCount: function () { return waitingImagePaths(textarea.value).length; }, dispose: dispose };
+  }
+
+  /* ---------- posts: autosave ---------- */
+  // Per-browser safety net while writing. Storage can be blocked; then the editor simply works without it.
+  function autosaveStore(key) {
+    var storageKey = AUTOSAVE_PREFIX + key;
+    return {
+      read: function () {
+        try { var raw = localStorage.getItem(storageKey); return raw ? JSON.parse(raw) : null; }
+        catch (storageError) { console.warn('Autosave unreadable, ignoring it:', storageError.name); return null; }
+      },
+      write: function (snapshot) {
+        try { localStorage.setItem(storageKey, JSON.stringify(snapshot)); }
+        catch (storageError) { console.warn('Autosave not written:', storageError.name); }
+      },
+      clear: function () {
+        try { localStorage.removeItem(storageKey); }
+        catch (storageError) { console.warn('Autosave not cleared:', storageError.name); }
+      }
+    };
+  }
+  function sameFields(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function formatSavedAt(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + twoDigits(d.getHours()) + ':' + twoDigits(d.getMinutes());
+  }
+  function restoreBanner(snapshot, onRestore, onDiscard) {
+    var banner = el('div', { class: 'restore', role: 'status' });
+    var lostImages = snapshot.pendingImages ? '還沒上傳的 ' + snapshot.pendingImages + ' 張圖片需要重新插入。' : '';
+    banner.append(
+      el('p', { text: '有 ' + formatSavedAt(snapshot.savedAt) + ' 自動暫存、還沒儲存的內容。' + lostImages }),
+      el('div', { class: 'acts' }, [
+        el('button', { type: 'button', class: 'btn btn-solid', text: '還原', onclick: function () { banner.remove(); onRestore(); } }),
+        el('button', { type: 'button', class: 'btn btn-line', text: '捨棄', onclick: function () { banner.remove(); onDiscard(); } })
+      ]));
+    return banner;
+  }
+
+  /* ---------- posts: fields ---------- */
+  // Every input of the post form except the body. read()/apply() move the values in and out as one plain object.
+  function postFields(p) {
+    var isNew = !p;
+    var inputs = {
+      slug: el('input', { type: 'text', value: p ? p.slug : '', readonly: !isNew, spellcheck: 'false', autocomplete: 'off' }),
+      cat: el('select', {}, CATS.map(function (c) { return el('option', { value: c[0], text: c[1] }); })),
+      date: el('input', { type: 'date', value: p ? p.date : today() }),
+      titleZh: el('input', { type: 'text', value: p ? p.title.zh : '' }),
+      titleEn: el('input', { type: 'text', value: p ? (p.title.en || '') : '' }),
+      excerptZh: el('textarea', { rows: '2', value: p ? (p.excerpt.zh || '') : '' }),
+      excerptEn: el('textarea', { rows: '2', value: p ? (p.excerpt.en || '') : '' }),
+      game: el('select', {}, [el('option', { value: '', text: '（無）' })].concat(state.games.map(function (g) {
+        return el('option', { value: g.id, text: (g.name && (g.name.zh || g.name.en)) || g.id });
+      }))),
+      draft: el('input', { type: 'checkbox', checked: Boolean(p && p.draft) })
+    };
+    inputs.cat.value = p ? p.cat : 'game';
+    inputs.game.value = (p && p.game) || '';
+    var node = el('div', { class: 'stack' }, [
+      el('div', { class: 'grid2' }, [field('中文標題', inputs.titleZh), field('英文標題', inputs.titleEn, '可留空，英文版會改用中文標題')]),
+      el('div', { class: 'grid2' }, [field('中文摘要', inputs.excerptZh, '列表上的一句話介紹，也是分享預覽的說明'), field('英文摘要', inputs.excerptEn)]),
+      el('div', { class: 'grid2' }, [field('分類', inputs.cat), field('日期', inputs.date)]),
+      el('div', { class: 'grid2' }, [
+        field('網址代稱', inputs.slug, isNew ? '文章網址會是 ggrst.io/posts/這個值/，建立後不能改' : '建立後不能修改'),
+        field('相關遊戲', inputs.game, '文章頁會顯示這款遊戲的存檔，存檔卡也會列出這篇')
+      ]),
+      el('label', { class: 'chk' }, [inputs.draft, el('span', {}, ['設為草稿', el('span', { class: 'hint', text: '　網站上不顯示。注意：.md 檔仍在公開的 GitHub repo 裡' })])])
+    ]);
+    function read() {
+      return Object.fromEntries(Object.keys(inputs).map(function (key) {
+        var input = inputs[key];
+        return [key, input.type === 'checkbox' ? input.checked : input.value];
+      }));
+    }
+    function apply(values) {
+      Object.keys(inputs).forEach(function (key) {
+        if (!(key in values) || (key === 'slug' && !isNew)) return;
+        if (inputs[key].type === 'checkbox') inputs[key].checked = Boolean(values[key]);
+        else inputs[key].value = values[key];
+      });
+    }
+    return { node: node, inputs: inputs, read: read, apply: apply };
+  }
+
+  function postMetaFrom(values, slug) {
+    var meta = { slug: slug, cat: values.cat, date: values.date || today(),
+      title: { zh: values.titleZh.trim(), en: values.titleEn.trim() }, excerpt: { zh: values.excerptZh.trim(), en: values.excerptEn.trim() } };
+    return Object.assign(meta, values.game ? { game: values.game } : {}, values.draft ? { draft: true } : {});
   }
 
   /* ---------- posts ---------- */
   function editPost(p) {
     var isNew = !p;
-    var slug = el('input', { type: 'text', value: p ? p.slug : '', readonly: !isNew, spellcheck: 'false', autocomplete: 'off' });
-    var cat = el('select', {}, CATS.map(function (c) { return el('option', { value: c[0], text: c[1] }); }));
-    cat.value = p ? p.cat : 'game';
-    var date = el('input', { type: 'date', value: p ? p.date : today() });
-    var tz = el('input', { type: 'text', value: p ? p.title.zh : '' }), te = el('input', { type: 'text', value: p ? (p.title.en || '') : '' });
-    var ez = el('textarea', { rows: '2', value: p ? (p.excerpt.zh || '') : '' }), ee = el('textarea', { rows: '2', value: p ? (p.excerpt.en || '') : '' });
+    var fields = postFields(p), inputs = fields.inputs;
     var bodyEditor = postBodyEditor();
     var body = bodyEditor.textarea;
+    var autosave = autosaveStore(isNew ? 'new' : p.slug);
+    var autosaveTimer = null, isClosed = false;
     var err = el('p', { class: 'err', role: 'alert' });
-    var save = el('button', { type: 'submit', class: 'btn btn-solid', text: isNew ? '發佈文章' : '儲存變更' });
+    var save = el('button', { type: 'submit', class: 'btn btn-solid' });
     var bodySha = null;
+    var notice = el('div', {});
 
-    var form = el('form', { class: 'panel stack', oninput: function () { setDirty(true); }, onsubmit: function (e) {
+    function saveLabel() { return isNew ? (inputs.draft.checked ? '儲存草稿' : '發佈文章') : '儲存變更'; }
+    function snapshotValues() { return Object.assign(fields.read(), { body: body.value }); }
+    // A focused field fires one last change event as the form is removed; isClosed keeps it from re-saving.
+    function scheduleAutosave() {
+      if (isClosed) return;
+      clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(function () {
+        autosave.write({ savedAt: new Date().toISOString(), values: snapshotValues(), pendingImages: bodyEditor.pendingImageCount() });
+      }, AUTOSAVE_DELAY_MS);
+    }
+    function leaveEditor() { isClosed = true; clearTimeout(autosaveTimer); bodyEditor.dispose(); }
+    function offerRestore() {
+      var snapshot = autosave.read();
+      if (!snapshot || !snapshot.values || sameFields(snapshot.values, snapshotValues())) return;
+      notice.replaceChildren(restoreBanner(snapshot, function () {
+        fields.apply(snapshot.values); body.value = snapshot.values.body || ''; save.textContent = saveLabel(); setDirty(true);
+      }, autosave.clear));
+    }
+    function onChange() { setDirty(true); save.textContent = saveLabel(); scheduleAutosave(); }
+
+    function submit(e) {
       e.preventDefault(); if (state.busy) return;
-      err.textContent = ''; [slug, tz, body].forEach(function (n) { n.removeAttribute('aria-invalid'); });
-      var s = slug.value.trim().toLowerCase();
+      err.textContent = ''; [inputs.slug, inputs.titleZh, body].forEach(function (n) { n.removeAttribute('aria-invalid'); });
+      var values = fields.read(), s = values.slug.trim().toLowerCase();
       var bad = function (n, m) { err.textContent = m; n.setAttribute('aria-invalid', 'true'); n.focus(); };
-      if (!SLUG_PATTERN.test(s)) return bad(slug, '網址代稱只能用小寫英文、數字和連字號，例如 botw-first-week。');
-      if (isNew && state.posts.some(function (x) { return x.slug === s; })) return bad(slug, '已經有文章用了「' + s + '」，請換一個網址代稱。');
-      if (!tz.value.trim()) return bad(tz, '請填中文標題。');
+      if (!SLUG_PATTERN.test(s)) return bad(inputs.slug, '網址代稱只能用小寫英文、數字和連字號，例如 botw-first-week。');
+      if (isNew && state.posts.some(function (x) { return x.slug === s; })) return bad(inputs.slug, '已經有文章用了「' + s + '」，請換一個網址代稱。');
+      if (!values.titleZh.trim()) return bad(inputs.titleZh, '請填中文標題。');
       if (!body.value.trim()) { bodyEditor.showWrite(); return bad(body, '內文是空的，請先寫點內容。'); }
-      var meta = { slug: s, cat: cat.value, date: date.value || today(),
-        title: { zh: tz.value.trim(), en: te.value.trim() }, excerpt: { zh: ez.value.trim(), en: ee.value.trim() } };
+      var meta = postMetaFrom(values, s);
       var next = state.posts.filter(function (x) { return x.slug !== s; }).concat([meta]);
       var markdown = body.value.replace(/\r\n/g, '\n');
       busy(save, true);
       bodyEditor.uploadImages(markdown, function (done, total) { save.textContent = '上傳圖片 ' + done + '/' + total + '…'; })
         .then(function () { save.textContent = '儲存中…'; return putFile('posts/' + s + '.md', markdown, bodySha, commitMsg((isNew ? 'add' : 'update') + ' post ' + s)); })
         .then(function (sha) { bodySha = sha; return putFile('data/posts.json', JSON.stringify(next, null, 2) + '\n', state.postsSha, commitMsg('update post index for ' + s)); })
-        .then(function (sha) { state.posts = next; state.postsSha = sha; setDirty(false); busy(save, false); bodyEditor.dispose(); saved(); renderList(); })
+        .then(function (sha) {
+          state.posts = next; state.postsSha = sha; setDirty(false); busy(save, false);
+          leaveEditor(); autosave.clear();
+          if (meta.draft) toast('已存成草稿，網站上不會顯示。');
+          else saved(['看文章', '../posts/' + encodeURIComponent(s) + '/']);
+          renderList();
+        })
         .catch(function (e) { busy(save, false); onFail(e); });
-    } }, [
-      el('div', { class: 'grid2' }, [field('中文標題', tz), field('英文標題', te, '可留空，英文版會改用中文標題')]),
-      el('div', { class: 'grid2' }, [field('中文摘要', ez, '列表上的一句話介紹'), field('英文摘要', ee)]),
-      el('div', { class: 'grid2' }, [field('分類', cat), field('日期', date)]),
-      field('網址代稱', slug, isNew ? '文章網址會是 ggrst.io/post.html?p=這個值，建立後不能改' : '建立後不能修改'),
+    }
+
+    var form = el('form', { class: 'panel stack', oninput: onChange, onchange: onChange, onsubmit: submit }, [
+      notice,
+      fields.node,
       bodyEditor.node,
       err,
-      el('div', { class: 'acts' }, [save, el('button', { type: 'button', class: 'btn btn-line', text: '取消', onclick: function () { if (leaveOk()) { setDirty(false); bodyEditor.dispose(); renderList(); } } })])
+      el('div', { class: 'acts' }, [save, el('button', { type: 'button', class: 'btn btn-line', text: '取消', onclick: function () {
+        if (!leaveOk()) return;
+        setDirty(false); leaveEditor(); autosave.clear(); renderList();
+      } })])
     ]);
+    save.textContent = saveLabel();
     app.innerHTML = '';
     app.appendChild(el('div', { class: 'stack' }, [el('h1', { text: isNew ? '新增文章' : '編輯文章' }), form]));
-    if (!isNew) {
-      body.disabled = true; body.value = '讀取內文中…'; save.disabled = true;
-      getFile('posts/' + p.slug + '.md').then(function (f) { body.value = f.text; bodySha = f.sha; })
-        .catch(function (e) { body.value = ''; if (!(e && e.status === 404)) toast(explain(e), true); })
-        .then(function () { body.disabled = false; save.disabled = false; });
-    }
-    (isNew ? tz : body).focus();
+    if (isNew) { offerRestore(); inputs.titleZh.focus(); return; }
+    body.disabled = true; body.value = '讀取內文中…'; save.disabled = true;
+    getFile('posts/' + p.slug + '.md').then(function (f) { body.value = f.text; bodySha = f.sha; })
+      .catch(function (e) { body.value = ''; if (!(e && e.status === 404)) toast(explain(e), true); })
+      .then(function () { body.disabled = false; save.disabled = false; offerRestore(); body.focus(); });
   }
 
   function deletePost(p, btn) {

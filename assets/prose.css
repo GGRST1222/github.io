@@ -11,6 +11,17 @@
 .prose pre{background:var(--screen);color:var(--on-screen);border-radius:14px;padding:18px 20px;overflow-x:auto;overflow-wrap:normal;line-height:1.6}
 .prose pre code{background:none;border:0;padding:0;color:inherit;font-size:15px}
 .prose pre[data-lang]::before{content:attr(data-lang);display:block;margin-bottom:10px;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--on-screen-mute)}
+.prose .code-wrap{position:relative;margin:0 0 1.2em}
+.prose .code-wrap pre{margin:0}
+.prose .copy{position:absolute;top:10px;right:10px;min-height:32px;min-width:44px;padding:0 12px;border:1px solid var(--screen-2);border-radius:8px;background:var(--screen-2);color:var(--on-screen);font-size:13px;font-weight:700}
+.prose .copy:hover{border-color:var(--on-screen-mute)}
+.prose .copy:focus-visible{outline-color:var(--amber)}
+.prose h2,.prose h3{scroll-margin-top:calc(var(--hdr) + 16px)}
+.prose .anchor{margin-left:.35em;color:var(--line);font-weight:700;text-decoration:none;opacity:0;transition:opacity .15s}
+.prose h2:hover .anchor,.prose h3:hover .anchor,.prose .anchor:focus-visible{opacity:1;color:var(--cobalt)}
+@media (hover:none){.prose .anchor{opacity:1}}
+.prose img{cursor:zoom-in}
+.prose a img{cursor:pointer}
 .prose table{border-collapse:collapse;width:100%;display:block;overflow-x:auto}
 .prose th,.prose td{border-bottom:1px solid var(--line);padding:8px 12px;text-align:left}
 .prose hr{border:0;border-top:1px solid var(--line);margin:2.4em 0}
