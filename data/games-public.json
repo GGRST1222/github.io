@@ -143,22 +143,22 @@
       {
         "zh": "通關 森林神殿",
         "en": "Clear the Forest Temple",
-        "done": false
+        "done": true
       },
       {
         "zh": "通關 火之神殿",
         "en": "Clear the Fire Temple",
-        "done": false
+        "done": true
       },
       {
         "zh": "通關 水之神殿",
         "en": "Clear the Water Temple",
-        "done": false
+        "done": true
       },
       {
         "zh": "通關 暗影神殿",
         "en": "Clear the Shadow Temple",
-        "done": false
+        "done": true
       },
       {
         "zh": "通關 魂之神殿",
